@@ -1,0 +1,111 @@
+name: ${COMPOSE_PROJECT_NAME:-mctl}
+
+services:
+  # ---------------------------------------------------------------------------
+  # Single public entry point for all Minecraft traffic. Reads the hostname out
+  # of the client handshake and proxies to the right backend container.
+  # ---------------------------------------------------------------------------
+  mc-router:
+    image: itzg/mc-router:latest
+    container_name: mctl-router
+    restart: unless-stopped
+    ports:
+      - "${MC_PORT:-25565}:25565"
+    environment:
+      API_BINDING: ":8080"
+      # The manager owns this file and rewrites it on every lifecycle change;
+      # ROUTES_CONFIG_WATCH makes mc-router pick changes up live. The file also
+      # means routes survive a router restart.
+      ROUTES_CONFIG: /routes/routes.json
+      ROUTES_CONFIG_WATCH: "true"
+      IN_DOCKER: "false"
+      CONNECTION_RATE_LIMIT: "10"
+      # Unknown hostnames land on the manager's waker, which answers with a
+      # readable "no such server" instead of a dropped connection.
+      DEFAULT: mctl-manager:25566
+    volumes:
+      - routes:/routes
+    networks:
+      - mcnet
+
+  # ---------------------------------------------------------------------------
+  # Manager: REST/WS API + SPA. Owns the Docker socket, speaks RCON to the
+  # servers over the internal network, and drives mc-router's route table.
+  # Also listens on 25566 as the "waker" that mc-router points sleeping
+  # hostnames at, so a join attempt can boot a stopped server.
+  # ---------------------------------------------------------------------------
+  manager:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mctl-manager:latest
+    container_name: mctl-manager
+    restart: unless-stopped
+    depends_on:
+      - mc-router
+    environment:
+      NODE_ENV: production
+      PORT: "8080"
+      TZ: ${TZ:-UTC}
+      # Identity / access control
+      REQUIRE_CF_ACCESS: ${REQUIRE_CF_ACCESS:-true}
+      ALLOWED_EMAILS: ${ALLOWED_EMAILS:-}
+      DEV_USER: ${DEV_USER:-}
+      # Infrastructure wiring
+      DOMAIN: ${DOMAIN:-mc.localhost}
+      MC_NETWORK: ${COMPOSE_PROJECT_NAME:-mctl}-net
+      ROUTER_API: http://mc-router:8080
+      ROUTES_FILE: /routes/routes.json
+      WAKER_TARGET: mctl-manager:25566
+      WAKER_PORT: "25566"
+      # Server defaults
+      MC_IMAGE: ${MC_IMAGE:-itzg/minecraft-server:latest}
+      HELPER_IMAGE: ${HELPER_IMAGE:-alpine:3.20}
+      DEFAULT_MEMORY: ${DEFAULT_MEMORY:-2G}
+      DATA_DIR: /app/data
+      BACKUP_DIR: /backups
+      # Optional integrations
+      CF_API_KEY: ${CF_API_KEY:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - routes:/routes
+      - manager-data:/app/data
+      - backups:/backups
+    networks:
+      - mcnet
+    # Not published to the host: reachable through the tunnel (and by mc-router)
+    expose:
+      - "8080"
+      - "25566"
+
+  # ---------------------------------------------------------------------------
+  # Cloudflare Tunnel. Publishes the manager UI (and enforces Cloudflare Access
+  # in front of it) without opening any inbound port on the host.
+  # Minecraft traffic itself stays on the direct 25565 port mapping above.
+  #
+  # Enabled by COMPOSE_PROFILES=tunnel in .env (the default). Clear that
+  # variable to bring the stack up without a tunnel, e.g. for local testing.
+  # ---------------------------------------------------------------------------
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: mctl-cloudflared
+    restart: unless-stopped
+    profiles: ["tunnel"]
+    command: tunnel --no-autoupdate run
+    environment:
+      # Required when the "tunnel" profile is active.
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+    depends_on:
+      - manager
+    networks:
+      - mcnet
+
+networks:
+  mcnet:
+    name: ${COMPOSE_PROJECT_NAME:-mctl}-net
+    driver: bridge
+
+volumes:
+  routes:
+  manager-data:
+  backups:

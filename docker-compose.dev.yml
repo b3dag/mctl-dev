@@ -1,0 +1,12 @@
+# Local testing overlay: publishes the manager UI on 127.0.0.1:8080 so you can
+# reach it without a Cloudflare Tunnel.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+#
+# Pair it with REQUIRE_CF_ACCESS=false and DEV_USER=you@example.com in .env.
+# Never use this overlay on a host that is exposed to the internet: with Access
+# enforcement off, anyone who can reach port 8080 controls every server.
+services:
+  manager:
+    ports:
+      - "127.0.0.1:8080:8080"

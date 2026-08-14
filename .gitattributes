@@ -1,0 +1,5 @@
+# The stack is built and run on Linux; keep LF in the working tree everywhere
+# so files copied into images behave the same regardless of clone platform.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
