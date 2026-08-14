@@ -59,6 +59,14 @@ CREATE TABLE IF NOT EXISTS audit_log (
 CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_log(at DESC);
 `);
 
+// --- migrations -------------------------------------------------------------
+// Additive only, guarded so an existing database upgrades in place on boot.
+const columns = (table) => db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+
+if (!columns('servers').includes('hostname_override')) {
+  db.exec('ALTER TABLE servers ADD COLUMN hostname_override TEXT');
+}
+
 export function audit(actor, serverId, action, detail) {
   db.prepare(
     'INSERT INTO audit_log (at, actor, server_id, action, detail) VALUES (?,?,?,?,?)'

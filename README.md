@@ -119,6 +119,18 @@ table (dropping the old names and registering the new ones), and logs what it
 moved. Containers, worlds and volumes are untouched — only the name players
 connect to changes. Point the new wildcard record at the host and you're done.
 
+### Per-server join addresses
+
+A server's **Join address** under Settings overrides the derived name, so one
+server can live outside the wildcard — `play.example.com` alongside
+`creative.mc.example.com`. It applies immediately (mc-router is updated without
+touching the container), and clearing it goes back to `<slug>.<DOMAIN>` and to
+following future `DOMAIN` changes. Make sure DNS for a custom address points at
+the host running mc-router.
+
+The slug itself stays fixed, because it also names the container and its data
+volume — the address players type is independent of that.
+
 ## What the UI does
 
 **Dashboard** — every server with live status, player count, and start / stop /

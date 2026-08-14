@@ -280,6 +280,17 @@ export async function updateServer(id, patch, actor) {
     fields.idle_timeout_minutes = Math.max(0, Math.trunc(+patch.idle_timeout_minutes) || 0);
   if (patch.env !== undefined) fields.env = JSON.stringify(sanitizeEnv(patch.env));
 
+  // An empty string clears the override and falls back to <slug>.<DOMAIN>.
+  if (patch.hostname !== undefined) {
+    const override = patch.hostname === null || patch.hostname === '' ? null : normalizeHostname(patch.hostname);
+    fields.hostname_override = override;
+    fields.hostname = override || `${server.slug}.${config.domain}`.toLowerCase();
+    const clash = db
+      .prepare('SELECT name FROM servers WHERE hostname = ? AND id != ?')
+      .get(fields.hostname, id);
+    if (clash) throw httpError(409, `${fields.hostname} is already used by "${clash.name}"`);
+  }
+
   if (Object.keys(fields).length) {
     const sets = Object.keys(fields).map((k) => `${k} = @${k}`).join(', ');
     db.prepare(`UPDATE servers SET ${sets} WHERE id = @id`).run({ ...fields, id });
@@ -357,15 +368,34 @@ export async function refreshAll() {
   return allStates();
 }
 
+/** A hostname label: letters, digits, hyphens, dot-separated. */
+const HOSTNAME_RE = /^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/;
+
+export function normalizeHostname(input) {
+  const host = String(input || '')
+    .trim()
+    .toLowerCase()
+    .replace(/^[a-z]+:\/\//, '') // tolerate a pasted URL
+    .replace(/[:/].*$/, '') // and a trailing port or path
+    .replace(/\.$/, '');
+  if (!host) return null;
+  if (!HOSTNAME_RE.test(host)) throw httpError(400, `"${input}" is not a valid hostname`);
+  return host;
+}
+
+/** Where players connect: an explicit override, else `<slug>.<DOMAIN>`. */
+export const effectiveHostname = (s) =>
+  (s.hostname_override || `${s.slug}.${config.domain}`).toLowerCase();
+
 /**
- * Hostnames are always `<slug>.<DOMAIN>`, but DOMAIN lives in .env and can
- * change after servers exist. Re-derive them on boot so editing .env and
- * restarting is all it takes to move every server to a new domain.
+ * DOMAIN lives in .env and can change after servers exist, so re-derive
+ * hostnames on boot. Servers with an explicit override keep it; the rest move
+ * to the new domain, which makes changing DOMAIN a one-line edit plus restart.
  */
 export function migrateHostnames() {
   const moved = [];
   for (const s of listServers()) {
-    const expected = `${s.slug}.${config.domain}`.toLowerCase();
+    const expected = effectiveHostname(s);
     if (s.hostname === expected) continue;
     db.prepare('UPDATE servers SET hostname = ? WHERE id = ?').run(expected, s.id);
     audit('system', s.id, 'server.rehost', `${s.hostname} -> ${expected}`);

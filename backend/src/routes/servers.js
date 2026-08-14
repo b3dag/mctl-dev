@@ -34,6 +34,7 @@ const shape = (s) => ({
   name: s.name,
   slug: s.slug,
   hostname: s.hostname,
+  hostnameOverride: s.hostname_override || '',
   container: s.container_name,
   type: s.type,
   version: s.version,

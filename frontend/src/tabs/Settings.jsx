@@ -6,6 +6,7 @@ export default function Settings({ server, onSaved }) {
   const [meta, setMeta] = useState(null);
   const [core, setCore] = useState({
     name: server.name,
+    hostname: server.hostnameOverride || '',
     type: server.type,
     version: server.version,
     memory: server.memory,
@@ -56,6 +57,24 @@ export default function Settings({ server, onSaved }) {
           <label>Display name</label>
           <input value={core.name} onChange={setCoreField('name')} />
         </div>
+
+        <div className="field">
+          <label>Join address</label>
+          <input
+            className="mono"
+            value={core.hostname}
+            onChange={setCoreField('hostname')}
+            placeholder={server.hostname}
+            autoCapitalize="off"
+            spellCheck={false}
+          />
+          <div className="small muted" style={{ marginTop: 6 }}>
+            {core.hostname.trim()
+              ? 'Custom address. Make sure DNS for it points at this host.'
+              : `Using the default for this server's slug. Leave empty to keep tracking the DOMAIN setting.`}{' '}
+            Takes effect immediately — mc-router is updated without restarting the server.
+          </div>
+        </div>
         <div className="row wrap" style={{ gap: 12 }}>
           <div className="field grow">
             <label>Type</label>
@@ -81,8 +100,8 @@ export default function Settings({ server, onSaved }) {
           <input type="number" min="0" value={core.idle_timeout_minutes} onChange={setCoreField('idle_timeout_minutes')} />
         </div>
         <div className="small muted">
-          Hostname <code>{server.hostname}</code> and container <code>{server.container}</code> are fixed;
-          create a new server to change them.
+          Container <code>{server.container}</code> and its data volume are named after the slug and
+          stay fixed; create a new server to change those.
         </div>
       </div>
 
