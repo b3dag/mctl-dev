@@ -104,6 +104,21 @@ Everything lives in `.env`:
 | `HELPER_IMAGE` | Short-lived image used for volume operations |
 | `DEFAULT_MEMORY` | Default heap for new servers |
 
+### Changing the domain later
+
+Hostnames are always derived as `<slug>.<DOMAIN>`, so moving every server to a
+new domain is one edit:
+
+```bash
+sed -i 's/^DOMAIN=.*/DOMAIN=mc.example.com/' .env
+docker compose up -d
+```
+
+On boot the manager re-derives each server's hostname, rewrites mc-router's
+table (dropping the old names and registering the new ones), and logs what it
+moved. Containers, worlds and volumes are untouched — only the name players
+connect to changes. Point the new wildcard record at the host and you're done.
+
 ## What the UI does
 
 **Dashboard** — every server with live status, player count, and start / stop /

@@ -358,11 +358,33 @@ export async function refreshAll() {
 }
 
 /**
+ * Hostnames are always `<slug>.<DOMAIN>`, but DOMAIN lives in .env and can
+ * change after servers exist. Re-derive them on boot so editing .env and
+ * restarting is all it takes to move every server to a new domain.
+ */
+export function migrateHostnames() {
+  const moved = [];
+  for (const s of listServers()) {
+    const expected = `${s.slug}.${config.domain}`.toLowerCase();
+    if (s.hostname === expected) continue;
+    db.prepare('UPDATE servers SET hostname = ? WHERE id = ?').run(expected, s.id);
+    audit('system', s.id, 'server.rehost', `${s.hostname} -> ${expected}`);
+    moved.push(`${s.hostname} -> ${expected}`);
+  }
+  if (moved.length) {
+    console.log(`[boot] DOMAIN changed, rehosted ${moved.length} server(s):`);
+    for (const m of moved) console.log(`  ${m}`);
+  }
+  return moved;
+}
+
+/**
  * Called on boot: adopt whatever containers already exist, then make the
  * router's table match reality.
  */
 export async function reconcile() {
   await ensureNetwork();
+  migrateHostnames();
   for (const s of listServers()) {
     const st = await containerState(s.container_name);
     if (!st.exists) {
