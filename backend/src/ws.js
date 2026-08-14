@@ -4,6 +4,7 @@ import { getServer, audit } from './db.js';
 import { followLogs, containerState } from './docker.js';
 import { events, allStates, stateOf } from './servers.js';
 import { rconCommand } from './rcon.js';
+import { stripFormatting } from './text.js';
 
 const CONSOLE_RE = /^\/api\/ws\/servers\/([0-9a-f-]{36})\/console$/i;
 
@@ -84,7 +85,7 @@ async function handleConsole(ws, user, id) {
         const text = carry + chunk.toString('utf8');
         const lines = text.split('\n');
         carry = lines.pop() ?? '';
-        for (const line of lines) send('line', { line });
+        for (const line of lines) send('line', { line: stripFormatting(line).replace(/\r$/, '') });
       });
       logStream.on('end', () => {
         if (!closed) send('info', { message: 'log stream ended' });
@@ -125,7 +126,7 @@ async function handleConsole(ws, user, id) {
     try {
       const output = await rconCommand(server, command);
       audit(user, id, 'rcon', command);
-      send('command', { command, output });
+      send('command', { command, output: stripFormatting(output) });
     } catch (e) {
       send('error', { message: `RCON: ${e.message}` });
     }

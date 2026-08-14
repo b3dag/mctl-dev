@@ -46,7 +46,7 @@ export default function Console({ server, state }) {
         else if (msg.type === 'error') push(`! ${msg.data.message}`, 'err');
         else if (msg.type === 'command') {
           push(`> ${msg.data.command}`, 'echo');
-          if (msg.data.output) push(String(msg.data.output).replace(/§./g, ''));
+          if (msg.data.output) push(msg.data.output);
         }
       };
     };

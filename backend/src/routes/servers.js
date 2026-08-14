@@ -18,6 +18,7 @@ import {
 import { rconCommand, playerList } from '../rcon.js';
 import { statsHistory, currentStats, diskUsage } from '../monitor.js';
 import { containerState } from '../docker.js';
+import { stripFormatting } from '../text.js';
 
 export const router = Router();
 
@@ -153,7 +154,7 @@ router.post('/:id/rcon', loadServer, async (req, res, next) => {
       throw httpError(400, 'use the stop/restart buttons so the manager can track state');
     const output = await rconCommand(req.server, command);
     audit(req.user, req.server.id, 'rcon', command);
-    res.json({ command, output });
+    res.json({ command, output: stripFormatting(output) });
   } catch (e) {
     next(e);
   }
