@@ -7,7 +7,7 @@ async function request(method, url, body, opts = {}) {
     ...opts,
   });
   if (res.status === 401) {
-    throw new Error('Not authenticated - Cloudflare Access did not pass an identity header.');
+    throw new Error('Not authenticated. Cloudflare Access did not pass an identity header.');
   }
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;
@@ -17,35 +17,36 @@ async function request(method, url, body, opts = {}) {
 
 const q = (params) => {
   const s = new URLSearchParams(
-    Object.entries(params || {}).filter(([, v]) => v !== undefined && v !== null)
+    Object.entries(params || {}).filter(([, v]) => v !== undefined && v !== null && v !== '')
   ).toString();
   return s ? `?${s}` : '';
 };
 
 export const api = {
+  // --- system ---------------------------------------------------------------
   me: () => request('GET', '/api/me'),
   health: () => request('GET', '/api/health'),
   meta: () => request('GET', '/api/servers/meta'),
-  ports: () => request('GET', '/api/ports'),
+  network: () => request('GET', '/api/network'),
+  syncRouter: () => request('POST', '/api/router/sync'),
+  allBackups: () => request('GET', '/api/backups'),
   audit: (params) => request('GET', `/api/audit${q(params)}`),
-  serverAudit: (id) => request('GET', `/api/servers/${id}/audit`),
   settings: () => request('GET', '/api/settings'),
   saveSettings: (body) => request('PUT', '/api/settings', body),
-  routerInfo: () => request('GET', '/api/router'),
-  routerSync: () => request('POST', '/api/router/sync'),
 
+  // --- servers --------------------------------------------------------------
   listServers: () => request('GET', '/api/servers'),
   getServer: (id) => request('GET', `/api/servers/${id}`),
   createServer: (body) => request('POST', '/api/servers', body),
   updateServer: (id, body) => request('PATCH', `/api/servers/${id}`, body),
   deleteServer: (id, slug, keepData) =>
     request('DELETE', `/api/servers/${id}${q({ confirm: slug, keepData: keepData ? 'true' : undefined })}`),
+  serverAudit: (id) => request('GET', `/api/servers/${id}/audit`),
 
   start: (id) => request('POST', `/api/servers/${id}/start`),
   stop: (id) => request('POST', `/api/servers/${id}/stop`),
   stopAndKeepOff: (id) => request('POST', `/api/servers/${id}/stop`, { keepOff: true }),
-  setAutostart: (id, on) =>
-    request('PATCH', `/api/servers/${id}`, { autostart_on_join: on, apply: false }),
+  setAutostart: (id, on) => request('PATCH', `/api/servers/${id}`, { autostart_on_join: on, apply: false }),
   restart: (id) => request('POST', `/api/servers/${id}/restart`),
   recreate: (id) => request('POST', `/api/servers/${id}/recreate`),
 
@@ -55,16 +56,17 @@ export const api = {
   banIp: (id, ip, reason) => request('POST', `/api/servers/${id}/ban-ip`, { ip, reason }),
   stats: (id, disk) => request('GET', `/api/servers/${id}/stats${q({ disk: disk ? 'true' : undefined })}`),
 
+  // --- files ----------------------------------------------------------------
   files: (id, path) => request('GET', `/api/servers/${id}/files${q({ path })}`),
   readFile: (id, path) => request('GET', `/api/servers/${id}/files/read${q({ path })}`),
   writeFile: (id, path, content) => request('PUT', `/api/servers/${id}/files/write`, { path, content }),
   deleteFile: (id, path) => request('DELETE', `/api/servers/${id}/files${q({ path })}`),
   mkdir: (id, path) => request('POST', `/api/servers/${id}/files/mkdir`, { path }),
   renameFile: (id, from, to) => request('POST', `/api/servers/${id}/files/rename`, { from, to }),
-  uploadFiles: (id, path, formData) =>
-    request('POST', `/api/servers/${id}/files/upload${q({ path })}`, formData),
+  uploadFiles: (id, path, formData) => request('POST', `/api/servers/${id}/files/upload${q({ path })}`, formData),
   downloadUrl: (id, path, zip) => `/api/servers/${id}/files/download${q({ path, zip: zip ? 'true' : undefined })}`,
 
+  // --- backups --------------------------------------------------------------
   backups: (id) => request('GET', `/api/servers/${id}/backups`),
   createBackup: (id, scope, note) => request('POST', `/api/servers/${id}/backups`, { scope, note }),
   deleteBackup: (id, bid) => request('DELETE', `/api/servers/${id}/backups/${bid}`),
@@ -74,6 +76,7 @@ export const api = {
   setBackupSchedule: (id, body) => request('PUT', `/api/servers/${id}/backups/schedule`, body),
   backupUrl: (id, bid, format) => `/api/servers/${id}/backups/${bid}/download${q({ format })}`,
 
+  // --- content --------------------------------------------------------------
   mods: (id) => request('GET', `/api/servers/${id}/mods`),
   searchMods: (id, query) => request('GET', `/api/servers/${id}/mods/search${q({ q: query })}`),
   installMod: (id, body) => request('POST', `/api/servers/${id}/mods/install`, body),

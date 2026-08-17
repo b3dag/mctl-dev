@@ -117,7 +117,7 @@ export function when(iso) {
   return d.toLocaleDateString();
 }
 
-export function Confirm({ title, message, confirmWord, onConfirm, onClose, danger = true }) {
+export function Confirm({ title, message, confirmWord, onConfirm, onClose, extra, danger = true }) {
   const [typed, setTyped] = useState('');
   const ok = !confirmWord || typed === confirmWord;
   return (
@@ -134,6 +134,7 @@ export function Confirm({ title, message, confirmWord, onConfirm, onClose, dange
       }
     >
       <p className="small">{message}</p>
+      {extra}
       {confirmWord && (
         <div className="field">
           <label>Type <code>{confirmWord}</code> to confirm</label>

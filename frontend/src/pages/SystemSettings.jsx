@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useAsync } from '../ui.jsx';
 
-export default function GeneralSettings({ onChange }) {
+export default function SystemSettings({ onChange }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [form, setForm] = useState({ domain: '', publicHost: '', stopWarningSeconds: '30' });

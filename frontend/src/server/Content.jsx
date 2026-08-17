@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { bytes, useAsync } from '../ui.jsx';
 
-export default function Mods({ server }) {
+export default function Content({ server }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [query, setQuery] = useState('');

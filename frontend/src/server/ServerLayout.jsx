@@ -1,33 +1,38 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api.js';
-import { Confirm, StatusDot, PHASE_LABEL, useAsync, useToast } from '../ui.jsx';
-import Console from '../tabs/Console.jsx';
-import Players from '../tabs/Players.jsx';
-import Files from '../tabs/Files.jsx';
-import Mods from '../tabs/Mods.jsx';
-import Backups from '../tabs/Backups.jsx';
-import Settings from '../tabs/Settings.jsx';
-import Stats from '../tabs/Stats.jsx';
+import { Confirm, StatusDot, PHASE_LABEL, useAsync } from '../ui.jsx';
+
+import Overview from './Overview.jsx';
+import Console from './Console.jsx';
+import Players from './Players.jsx';
+import Files from './Files.jsx';
+import Content from './Content.jsx';
+import Backups from './Backups.jsx';
+import Settings from './Settings.jsx';
 
 const TABS = [
+  ['overview', 'Overview'],
   ['console', 'Console'],
   ['players', 'Players'],
   ['files', 'Files'],
-  ['mods', 'Mods'],
+  ['content', 'Content'],
   ['backups', 'Backups'],
-  ['stats', 'Stats'],
   ['settings', 'Settings'],
 ];
 
-export default function ServerDetail({ states = {}, onChange }) {
+/**
+ * Everything inside one server. The header states which server you are in and
+ * carries the lifecycle actions; the tabs below it are all scoped to it.
+ */
+export default function ServerLayout({ states = {}, onChange }) {
   const { id } = useParams();
   const nav = useNavigate();
-  const toast = useToast();
   const [server, setServer] = useState(null);
   const [me, setMe] = useState(null);
   const [error, setError] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [keepData, setKeepData] = useState(false);
   const { busy, run } = useAsync();
 
   const load = useCallback(() => {
@@ -35,19 +40,21 @@ export default function ServerDetail({ states = {}, onChange }) {
   }, [id]);
 
   useEffect(() => {
+    setServer(null);
+    setError(null);
     load();
     api.me().then(setMe).catch(() => {});
   }, [load]);
 
   if (error) return <div className="card err-text">{error}</div>;
-  if (!server) return <div className="empty">Loading…</div>;
+  if (!server) return <div className="empty">Loading</div>;
 
   const state = states[id] || server.state || {};
   const act = (fn, msg) => run(async () => { await fn(id); load(); onChange?.(); }, msg);
 
   return (
     <div className="stack">
-      <div className="row between wrap">
+      <div className="page-head">
         <div style={{ minWidth: 0 }}>
           <h2>{server.name}</h2>
           <div className="row small muted" style={{ gap: 10, marginTop: 2 }}>
@@ -59,17 +66,18 @@ export default function ServerDetail({ states = {}, onChange }) {
               <span>{state.online ?? 0}{state.max ? `/${state.max}` : ''} online</span>
             )}
             <span>{server.type} {server.version}</span>
-            {!server.autostartOnJoin && <span className="pill">wake-on-join off</span>}
+            {!server.autostartOnJoin && <span className="pill">wake off</span>}
           </div>
         </div>
-        <div className="row wrap" style={{ gap: 6 }}>
+
+        <div className="actions">
           {state.running ? (
             <>
               <button className="sm" disabled={busy} onClick={() => act(api.stop, 'Stopping')}>Stop</button>
               <button
                 className="sm"
                 disabled={busy}
-                title="Stop it and stop waking it up when players connect"
+                title="Stop it and stop waking it when players connect"
                 onClick={() => act(api.stopAndKeepOff, 'Stopping and staying off')}
               >
                 Stop and keep off
@@ -79,57 +87,7 @@ export default function ServerDetail({ states = {}, onChange }) {
           ) : (
             <button className="sm primary" disabled={busy} onClick={() => act(api.start, 'Starting')}>Start</button>
           )}
-          <button className="sm danger" onClick={() => setConfirmDelete(true)}>Delete</button>
         </div>
-      </div>
-
-      {!server.autostartOnJoin && (
-        <div className="card row between wrap" style={{ gap: 8 }}>
-          <div className="small">
-            Wake-on-join is off, so connecting players are told the server is offline instead of
-            starting it.
-          </div>
-          <button
-            className="sm"
-            disabled={busy}
-            onClick={() => run(async () => { await api.setAutostart(id, true); load(); onChange?.(); }, 'Wake-on-join enabled')}
-          >
-            Enable wake-on-join
-          </button>
-        </div>
-      )}
-
-      <div className="card">
-        <table>
-          <tbody>
-            <tr>
-              <td style={{ width: 150 }} className="muted">Router address</td>
-              <td>
-                <button
-                  className="link mono"
-                  onClick={() => { navigator.clipboard?.writeText(server.routerAddress); toast('Copied'); }}
-                >
-                  {server.routerAddress}
-                </button>
-              </td>
-            </tr>
-            <tr>
-              <td className="muted">Direct connection</td>
-              <td>
-                {server.directAddress ? (
-                  <button
-                    className="link mono"
-                    onClick={() => { navigator.clipboard?.writeText(server.directAddress); toast('Copied'); }}
-                  >
-                    {server.directAddress}
-                  </button>
-                ) : (
-                  <span className="muted">none, set a direct port under Settings</span>
-                )}
-              </td>
-            </tr>
-          </tbody>
-        </table>
       </div>
 
       <nav className="tabs">
@@ -141,28 +99,45 @@ export default function ServerDetail({ states = {}, onChange }) {
       </nav>
 
       <Routes>
-        <Route index element={<Navigate to="console" replace />} />
+        <Route index element={<Navigate to="overview" replace />} />
+        <Route path="overview" element={<Overview server={server} state={state} me={me} />} />
         <Route path="console" element={<Console server={server} state={state} />} />
         <Route path="players" element={<Players server={server} state={state} />} />
         <Route path="files" element={<Files server={server} />} />
-        <Route path="mods" element={<Mods server={server} />} />
+        <Route path="content" element={<Content server={server} />} />
         <Route path="backups" element={<Backups server={server} />} />
-        <Route path="stats" element={<Stats server={server} state={state} />} />
         <Route
           path="settings"
-          element={<Settings server={server} me={me} onSaved={() => { load(); onChange?.(); }} />}
+          element={
+            <Settings
+              server={server}
+              me={me}
+              onSaved={() => { load(); onChange?.(); }}
+              onDelete={() => setConfirmDelete(true)}
+            />
+          }
         />
       </Routes>
 
       {confirmDelete && (
         <Confirm
           title={`Delete ${server.name}?`}
-          message="This removes the container, its data volume (world, configs, mods) and its route. Backups already taken are kept."
+          message={
+            keepData
+              ? 'This removes the container and its route but leaves the data volume in place, so the world can be recovered.'
+              : 'This removes the container, its route, and its data volume: world, configs and mods. Backups already taken are kept.'
+          }
           confirmWord={server.slug}
           onClose={() => setConfirmDelete(false)}
+          extra={
+            <div className="checkbox" style={{ marginTop: 10 }}>
+              <input id="keepdata" type="checkbox" checked={keepData} onChange={(e) => setKeepData(e.target.checked)} />
+              <label htmlFor="keepdata">Keep the data volume</label>
+            </div>
+          }
           onConfirm={() =>
             run(async () => {
-              await api.deleteServer(id, server.slug, false);
+              await api.deleteServer(id, server.slug, keepData);
               onChange?.();
               nav('/');
             }, 'Server deleted')

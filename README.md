@@ -152,46 +152,53 @@ rather than failing later at container start.
 
 ## What the UI does
 
-A sidebar lists your servers with live status, plus the general pages
-(Overview, Ports, Router, Settings). On a phone it collapses into a drawer.
+The sidebar has exactly two sections: the **servers** you manage, and the
+**system** that runs them. Every page belongs to one of them. On a phone the
+sidebar collapses into a drawer.
 
-**Overview** - the base domain, the shared port, and a table of every server
-with its address, status, player count and quick actions.
+### System
 
-**Console** - the container's log stream over a WebSocket, with a command input
-that goes out over RCON. `stop` and `restart` are refused here so the manager
-stays the only thing driving lifecycle; use the buttons.
+**Servers** is the home screen: every server with its status, both addresses and
+start/stop/restart.
 
-**Players** - online list, kick, ban, ban-ip, pardon, op/deop, whitelist add and
-remove, all RCON.
+**Network** answers "can players reach this and how" in one place: each server's
+router address and direct address, what is actually open on the host, whether
+mc-router agrees with mctl, and which ports stay internal. This replaces the
+separate Ports and Router pages, which were the same subject split by
+implementation.
 
-**Files** - browse `/data`, edit `server.properties`, `whitelist.json`,
-`ops.json`, `banned-players.json` and friends in the browser, upload, delete,
-rename, and download any folder (including the world) as a zip.
+**Backups** covers the repository, which is shared by every server: its size on
+disk against restored size, and a row per server showing snapshot count, most
+recent snapshot and schedule. Per-server snapshot lists live on the server.
 
-**Mods** - for Paper/Spigot/Purpur/Fabric/Forge/NeoForge/Quilt: list installed
-jars, enable/disable (rename to `.disabled`), remove, upload, install from a
-direct HTTPS URL, or search Modrinth filtered to the server's loader and game
-version.
+**Activity** is the audit trail, filterable by person and searchable.
 
-**Backups** - snapshots go into a restic repository, which deduplicates at the
-chunk level: a second snapshot of a world that has not changed costs close to
-nothing, and the page shows on-disk size against the total restored size so you
-can see it. Running servers get `save-off` plus `save-all flush` first for a
-consistent copy. Schedule with cron, keep the last N, verify the repository's
-integrity, download any snapshot as `.tar.gz` or `.zip`, restore with
-confirmation.
+**Settings** is genuinely global: base domain, host address for direct ports,
+and the shutdown countdown.
 
-**Stats** - CPU and memory from Docker stats with a rolling history, plus disk
-usage of the data volume on demand.
+### Inside a server
 
-**Activity** - the audit trail: who started, stopped, edited, deleted or ran a command,
-filterable by person and searchable, with server names resolved even after a server is gone.
+Seven tabs, each one job.
 
-**Settings** - a form over the environment variables the itzg image supports
-(difficulty, gamemode, MOTD, view distance, …) plus an escape hatch for any
-other variable. Applying recreates the container against the same volume, so
-worlds, mods and configs survive.
+**Overview** is the landing page: where to connect, CPU, memory and disk, the
+container's facts, and recent activity for that server.
+
+**Console** streams the container log and sends commands over RCON.
+
+**Players** lists who is online with kick, ban, ban-ip, pardon, op/deop and
+whitelist.
+
+**Files** browses `/data`, edits configs in place, uploads, deletes, renames and
+downloads folders as a zip.
+
+**Content** manages mods and plugins: what is installed, enable, disable, remove,
+upload a jar, install from a URL, or search Modrinth filtered to this server.
+
+**Backups** is this server's snapshots and its schedule.
+
+**Settings** is grouped rather than one long form: Identity, Connection,
+Runtime, Behaviour, the game's own settings, Advanced for any other environment
+variable, and Danger for deleting.
 
 ## Deployment notes
 

@@ -209,6 +209,38 @@ tr:last-child td { border-bottom: none; }
 .kv dt { color: var(--muted); }
 .kv dd { margin: 0; }
 
+/* --- new shell bits ------------------------------------------------------- */
+
+.page-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+}
+.page-head h2 { margin-bottom: 2px; }
+
+.actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+td.actions { justify-content: flex-end; }
+
+.strong { font-weight: 600; }
+
+.nav-label-link { color: var(--muted); }
+.nav-label-link:hover { color: var(--text); text-decoration: none; }
+.nav-label a { color: var(--muted); }
+
+section.card + section.card { margin-top: 0; }
+
+.save-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  flex-wrap: wrap;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 11px 13px;
+  position: sticky; bottom: 0; z-index: 5;
+}
+
+.danger-zone { border-color: #3a2a2c; }
+
+.spark-fill { fill: var(--muted); opacity: 0.12; }
+.spark-line { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+
 /* --- mobile --------------------------------------------------------------- */
 
 .scrim { display: none; }

@@ -2,7 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useAsync } from '../ui.jsx';
 
-export default function Settings({ server, me, onSaved }) {
+/**
+ * Grouped by what you came to change, rather than one long form: who it is,
+ * how it is reached, what it runs, how it behaves, then the game's own
+ * settings and finally the escape hatches.
+ */
+export default function Settings({ server, me, onSaved, onDelete }) {
   const [meta, setMeta] = useState(null);
   const [core, setCore] = useState({
     name: server.name,
@@ -23,7 +28,7 @@ export default function Settings({ server, me, onSaved }) {
     api.meta().then(setMeta).catch(() => {});
   }, []);
 
-  const setCoreField = (k) => (e) => {
+  const set = (k) => (e) => {
     const v = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     setCore((c) => ({ ...c, [k]: v }));
   };
@@ -46,40 +51,51 @@ export default function Settings({ server, me, onSaved }) {
         apply,
       });
       onSaved?.();
-    }, apply ? 'Saved - container recreated' : 'Saved (not yet applied)');
+    }, apply ? 'Saved and container recreated' : 'Saved, not yet applied');
 
   const catalogKeys = new Set((meta?.envCatalog || []).flatMap((g) => g.vars.map((v) => v.key)));
   const extraEnv = Object.entries(env).filter(([k]) => !catalogKeys.has(k));
 
   return (
     <div className="stack">
-      <div className="card stack">
-        <strong>Core</strong>
+      <section className="card">
+        <div className="card-head"><h3>Identity</h3></div>
         <div className="field">
           <label>Display name</label>
-          <input value={core.name} onChange={setCoreField('name')} />
+          <input value={core.name} onChange={set('name')} />
         </div>
+        <dl className="kv">
+          <dt>Short name</dt><dd className="mono">{server.slug}</dd>
+          <dt>Container</dt><dd className="mono">{server.container}</dd>
+        </dl>
+        <div className="hint">
+          The short name also names the container and its data volume, so it stays fixed. Create a
+          new server to change it.
+        </div>
+      </section>
 
+      <section className="card">
+        <div className="card-head"><h3>Connection</h3></div>
         <div className="field">
           <label>Join address</label>
           <input
             className="mono"
             value={core.hostname}
-            onChange={setCoreField('hostname')}
+            onChange={set('hostname')}
             placeholder={server.hostname}
             autoCapitalize="off"
             spellCheck={false}
           />
           <div className="hint">
             {core.hostname.trim()
-              ? 'Custom address. Make sure DNS for it points at this host.'
-              : `Using the default for this server's slug. Leave empty to keep tracking the base domain.`}{' '}
-            Applied immediately, without restarting the server.
+              ? 'A custom address. Make sure DNS for it points at this host.'
+              : 'Empty means it follows the base domain automatically.'}{' '}
+            Applied immediately, without restarting.
           </div>
         </div>
 
         <div className="field">
-          <label>Direct port (optional)</label>
+          <label>Direct port</label>
           <input
             className="mono"
             type="number"
@@ -87,49 +103,58 @@ export default function Settings({ server, me, onSaved }) {
             max="65535"
             style={{ maxWidth: 160 }}
             value={core.host_port}
-            onChange={setCoreField('host_port')}
+            onChange={set('host_port')}
             placeholder="none"
           />
           <div className="hint">
             {core.host_port
-              ? <>Also reachable at <code className="mono">{me?.publicHost || 'your-host'}:{core.host_port}</code> without DNS. Forward this port on your firewall.</>
-              : <>Only reachable by hostname through mc-router on port {me?.publicMcPort ?? 25565}. Set a port here to publish it directly as well - useful if you don't want to set up DNS.</>}
+              ? <>Also reachable at <code className="mono">{me?.publicHost || 'your-host'}:{core.host_port}</code>, no DNS needed.</>
+              : <>Only reachable by hostname on port {me?.publicMcPort ?? 25565}. Set a port to publish it directly as well.</>}
             {' '}Changing this recreates the container.
           </div>
         </div>
+      </section>
+
+      <section className="card">
+        <div className="card-head"><h3>Runtime</h3></div>
         <div className="row wrap" style={{ gap: 12 }}>
           <div className="field grow">
             <label>Type</label>
-            <select value={core.type} onChange={setCoreField('type')}>
+            <select value={core.type} onChange={set('type')}>
               {(meta?.types || []).map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </div>
           <div className="field grow">
             <label>Version</label>
-            <input value={core.version} onChange={setCoreField('version')} />
+            <input value={core.version} onChange={set('version')} />
           </div>
           <div className="field grow">
             <label>Memory</label>
-            <input value={core.memory} onChange={setCoreField('memory')} />
+            <input value={core.memory} onChange={set('memory')} />
           </div>
         </div>
+        <div className="hint">Changing any of these recreates the container against the same world.</div>
+      </section>
+
+      <section className="card">
+        <div className="card-head"><h3>Behaviour</h3></div>
         <div className="checkbox">
-          <input id="wake" type="checkbox" checked={core.autostart_on_join} onChange={setCoreField('autostart_on_join')} />
-          <label htmlFor="wake">Start automatically when a player joins</label>
+          <input id="wake" type="checkbox" checked={core.autostart_on_join} onChange={set('autostart_on_join')} />
+          <label htmlFor="wake">Start automatically when a player connects</label>
         </div>
-        <div className="field" style={{ maxWidth: 220 }}>
-          <label>Stop after idle (minutes, 0 = never)</label>
-          <input type="number" min="0" value={core.idle_timeout_minutes} onChange={setCoreField('idle_timeout_minutes')} />
+        <div className="hint" style={{ marginBottom: 12 }}>
+          With this off, players are told the server is offline instead of waking it.
         </div>
-        <div className="hint">
-          Container <code>{server.container}</code> and its data volume are named after the short
-          name and stay fixed; create a new server to change those.
+        <div className="field" style={{ maxWidth: 220, marginBottom: 0 }}>
+          <label>Stop after idle, in minutes</label>
+          <input type="number" min="0" value={core.idle_timeout_minutes} onChange={set('idle_timeout_minutes')} />
+          <div className="hint">0 keeps it running forever.</div>
         </div>
-      </div>
+      </section>
 
       {(meta?.envCatalog || []).map((group) => (
-        <div className="card stack" key={group.group}>
-          <strong>{group.group}</strong>
+        <section className="card" key={group.group}>
+          <div className="card-head"><h3>{group.group}</h3></div>
           <div className="grid">
             {group.vars.map((v) => (
               <div className="field" key={v.key} style={{ margin: 0 }}>
@@ -154,24 +179,24 @@ export default function Settings({ server, me, onSaved }) {
                     onChange={(e) => setEnvVar(v.key, e.target.value)}
                   />
                 )}
-                {v.hint && <div className="small muted">{v.hint}</div>}
+                {v.hint && <div className="hint">{v.hint}</div>}
               </div>
             ))}
           </div>
-        </div>
+        </section>
       ))}
 
-      <div className="card stack">
-        <strong>Other environment variables</strong>
-        <div className="small muted">
-          Anything else the itzg image supports. <code>EULA</code>, <code>TYPE</code>,{' '}
-          <code>VERSION</code> and the RCON settings are managed for you and cannot be set here.
+      <section className="card">
+        <div className="card-head"><h3>Advanced</h3></div>
+        <div className="hint" style={{ marginTop: 0, marginBottom: 10 }}>
+          Any other variable the itzg image supports. <code>EULA</code>, <code>TYPE</code>,{' '}
+          <code>VERSION</code> and the RCON settings are managed for you.
         </div>
         {extraEnv.map(([k, v]) => (
-          <div className="row" key={k} style={{ gap: 8 }}>
+          <div className="row" key={k} style={{ gap: 8, marginBottom: 8 }}>
             <input className="mono" style={{ maxWidth: 220 }} value={k} readOnly />
             <input className="grow mono" value={v} onChange={(e) => setEnvVar(k, e.target.value)} />
-            <button className="sm danger" onClick={() => setEnvVar(k, '')}>×</button>
+            <button className="sm danger" onClick={() => setEnvVar(k, '')}>remove</button>
           </div>
         ))}
         <div className="row" style={{ gap: 8 }}>
@@ -186,26 +211,32 @@ export default function Settings({ server, me, onSaved }) {
           <button
             className="sm"
             disabled={!rawKey.trim()}
-            onClick={() => {
-              setEnvVar(rawKey.trim(), rawVal);
-              setRawKey('');
-              setRawVal('');
-            }}
+            onClick={() => { setEnvVar(rawKey.trim(), rawVal); setRawKey(''); setRawVal(''); }}
           >
             add
           </button>
         </div>
-      </div>
+      </section>
 
-      <div className="card row wrap between">
-        <div className="small muted">
-          Applying recreates the container against the same data volume - worlds, mods and configs stay.
-        </div>
+      <div className="save-bar">
+        <span className="muted small">
+          Applying recreates the container against the same data volume. Worlds, mods and configs stay.
+        </span>
         <div className="row" style={{ gap: 8 }}>
           <button disabled={busy} onClick={() => save(false)}>Save only</button>
-          <button className="primary" disabled={busy} onClick={() => save(true)}>Save &amp; apply</button>
+          <button className="primary" disabled={busy} onClick={() => save(true)}>Save and apply</button>
         </div>
       </div>
+
+      <section className="card danger-zone">
+        <div className="card-head"><h3>Danger</h3></div>
+        <div className="row between wrap" style={{ gap: 10 }}>
+          <span className="small muted">
+            Deleting removes the container and its route, and optionally the world.
+          </span>
+          <button className="danger" onClick={onDelete}>Delete this server</button>
+        </div>
+      </section>
     </div>
   );
 }

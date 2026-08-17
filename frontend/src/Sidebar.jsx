@@ -3,13 +3,16 @@ import { NavLink, Link } from 'react-router-dom';
 import { StatusDot } from './ui.jsx';
 
 const SYSTEM = [
-  ['/', 'Overview', true],
-  ['/ports', 'Ports'],
-  ['/router', 'Router'],
+  ['/network', 'Network'],
+  ['/backups', 'Backups'],
   ['/activity', 'Activity'],
   ['/settings', 'Settings'],
 ];
 
+/**
+ * Two sections and nothing else: the servers you manage, and the system that
+ * runs them. Every page belongs to exactly one of the two.
+ */
 export default function Sidebar({ servers, states, open, onNavigate }) {
   return (
     <nav className={`sidebar${open ? ' open' : ''}`} onClick={onNavigate}>
@@ -19,11 +22,13 @@ export default function Sidebar({ servers, states, open, onNavigate }) {
 
       <div className="nav-group">
         <div className="nav-label">
-          <span>Servers</span>
-          <Link to="/new" title="New server" style={{ color: 'var(--muted)' }}>+</Link>
+          <NavLink to="/" end className="nav-label-link">Servers</NavLink>
+          <Link to="/new" title="New server">+</Link>
         </div>
-        {servers === null && <div className="nav-empty">Loading…</div>}
+
+        {servers === null && <div className="nav-empty">Loading</div>}
         {servers?.length === 0 && <div className="nav-empty">None yet</div>}
+
         {servers?.map((s) => {
           const state = states[s.id] || s.state || {};
           return (
@@ -44,8 +49,8 @@ export default function Sidebar({ servers, states, open, onNavigate }) {
 
       <div className="nav-group">
         <div className="nav-label"><span>System</span></div>
-        {SYSTEM.map(([to, label, end]) => (
-          <NavLink key={to} to={to} end={end} className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
+        {SYSTEM.map(([to, label]) => (
+          <NavLink key={to} to={to} className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
             <span className="nav-name">{label}</span>
           </NavLink>
         ))}

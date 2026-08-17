@@ -6,6 +6,7 @@ import { allStates, refreshAll, stateOf, migrateHostnames } from '../servers.js'
 import { db, listServers } from '../db.js';
 import { inspectSafe } from '../docker.js';
 import { getSettings, saveSettings, getDomain, getPublicHost, routerAddress, directAddress } from '../settings.js';
+import * as backups from '../backups.js';
 
 export const router = Router();
 
@@ -40,16 +41,13 @@ router.put('/settings', async (req, res, next) => {
 });
 
 /**
- * Everything that is or isn't reachable, in one place: the shared router port,
- * per-server direct ports, and the internal-only ones people ask about (RCON,
- * the waker) so it's clear they are not exposed.
+ * Everything about reachability in one call: what is open on the host, how each
+ * server is addressed, and whether mc-router agrees with us. The Network page
+ * asks one question, so it makes one request.
  */
-router.get('/ports', async (_req, res, next) => {
+router.get('/network', async (_req, res, next) => {
   try {
     const servers = listServers();
-
-    // Cross-check the database against what Docker actually has bound, so a
-    // container that predates a port change shows up as needing a restart.
     const entries = await Promise.all(
       servers.map(async (s) => {
         const info = await inspectSafe(s.container_name);
@@ -61,11 +59,9 @@ router.get('/ports', async (_req, res, next) => {
           slug: s.slug,
           hostname: s.hostname,
           hostPort: s.host_port || null,
-          actualPort: actual,
           pendingRestart: (s.host_port || null) !== actual,
           running: !!stateOf(s.id).running,
-          // Every server has a router address. The direct one is extra, not a
-          // replacement, so both are reported and the UI can say so.
+          autostartOnJoin: !!s.autostart_on_join,
           routerAddress: routerAddress(s),
           directAddress: directAddress(s),
         };
@@ -74,23 +70,36 @@ router.get('/ports', async (_req, res, next) => {
 
     const duplicates = {};
     for (const e of entries) {
-      if (!e.hostPort) continue;
-      (duplicates[e.hostPort] ||= []).push(e.name);
+      if (e.hostPort) (duplicates[e.hostPort] ||= []).push(e.name);
     }
+
+    const live = await currentRoutes();
+    const expected = buildMappings(allStates());
+    const hosts = [...new Set([...Object.keys(live || {}), ...Object.keys(expected)])].sort();
 
     res.json({
       publicHost: getPublicHost(),
-      shared: { port: config.publicMcPort, description: 'mc-router, shared by every hostname' },
+      sharedPort: config.publicMcPort,
+      servers: entries,
+      conflicts: Object.entries(duplicates)
+        .filter(([, names]) => names.length > 1)
+        .map(([port, names]) => ({ port: Number(port), servers: names })),
       internal: [
         { port: 25565, scope: 'each server', description: 'game port, internal network only' },
         { port: 25575, scope: 'each server', description: 'RCON, never published' },
         { port: config.wakerPort, scope: 'manager', description: 'waker, reached by mc-router only' },
         { port: config.port, scope: 'manager', description: 'web UI, served through the tunnel' },
       ],
-      servers: entries,
-      conflicts: Object.entries(duplicates)
-        .filter(([, names]) => names.length > 1)
-        .map(([port, names]) => ({ port: Number(port), servers: names })),
+      router: {
+        status: routerStatus(),
+        reachable: live !== null,
+        routes: hosts.map((h) => ({
+          hostname: h,
+          live: (live || {})[h] || null,
+          expected: expected[h] || null,
+          drifted: (live || {})[h] !== expected[h],
+        })),
+      },
     });
   } catch (e) {
     next(e);
@@ -109,19 +118,39 @@ router.get('/health', async (_req, res) => {
   res.json(out);
 });
 
-router.get('/router', async (_req, res) => {
-  res.json({
-    status: routerStatus(),
-    live: await currentRoutes(),
-    expected: buildMappings(allStates()),
-    wakerTarget: config.wakerTarget,
-  });
-});
-
 router.post('/router/sync', async (_req, res, next) => {
   try {
     await refreshAll();
     res.json({ mappings: await syncRoutes(allStates()) });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/**
+ * Backups across every server. The repository is shared, so its health and
+ * deduplication figures only make sense at this level; the per-server tab
+ * shows that server's own snapshots.
+ */
+router.get('/backups', async (_req, res, next) => {
+  try {
+    const servers = listServers();
+    const repo = await backups.repoStats().catch((e) => ({ error: e.message }));
+    res.json({
+      repo,
+      servers: servers.map((s) => {
+        const rows = backups.listBackups(s.id);
+        return {
+          id: s.id,
+          name: s.name,
+          slug: s.slug,
+          schedule: backups.getSchedule(s.id),
+          count: rows.length,
+          latest: rows[0]?.created_at || null,
+          backups: rows.slice(0, 5),
+        };
+      }),
+    });
   } catch (e) {
     next(e);
   }

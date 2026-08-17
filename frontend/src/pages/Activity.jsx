@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../api.js';
 import { when } from '../ui.jsx';
 
-export default function Audit() {
+export default function Activity() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [actor, setActor] = useState('');

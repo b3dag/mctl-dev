@@ -6,7 +6,7 @@ import { useAsync } from '../ui.jsx';
 const slugify = (s) =>
   s.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
 
-export default function CreateServer({ onCreated }) {
+export default function NewServer({ onCreated }) {
   const nav = useNavigate();
   const { busy, run } = useAsync();
   const [meta, setMeta] = useState(null);
