@@ -12,6 +12,7 @@ import {
   inspectSafe,
 } from './docker.js';
 import { syncRoutes } from './router.js';
+import { getDomain } from './settings.js';
 import { dropRcon, isReady, playerList } from './rcon.js';
 import { sanitizeEnv, RESERVED_ENV, SERVER_TYPES } from './envcatalog.js';
 
@@ -68,7 +69,7 @@ async function createContainer(server) {
   await ensureVolume(server.volume_name, { 'mctl.serverId': server.id });
   await ensureImage(config.mcImage);
 
-  // By default nothing is published — players arrive through mc-router. A
+  // By default nothing is published - players arrive through mc-router. A
   // server with host_port set is additionally reachable at that port directly,
   // which is the escape hatch for setups without wildcard DNS.
   const publish = server.host_port
@@ -147,7 +148,7 @@ export async function createServer(input, actor) {
     id,
     name,
     slug,
-    hostname: `${slug}.${config.domain}`.toLowerCase(),
+    hostname: `${slug}.${getDomain()}`.toLowerCase(),
     container_name: `mc-${slug}`,
     volume_name: `mctl-${slug}-data`,
     host_port: validateHostPort(input.host_port),
@@ -315,7 +316,7 @@ export async function updateServer(id, patch, actor) {
   if (patch.hostname !== undefined) {
     const override = patch.hostname === null || patch.hostname === '' ? null : normalizeHostname(patch.hostname);
     fields.hostname_override = override;
-    fields.hostname = override || `${server.slug}.${config.domain}`.toLowerCase();
+    fields.hostname = override || `${server.slug}.${getDomain()}`.toLowerCase();
     const clash = db
       .prepare('SELECT name FROM servers WHERE hostname = ? AND id != ?')
       .get(fields.hostname, id);
@@ -424,7 +425,7 @@ export function normalizeHostname(input) {
 
 /** Where players connect: an explicit override, else `<slug>.<DOMAIN>`. */
 export const effectiveHostname = (s) =>
-  (s.hostname_override || `${s.slug}.${config.domain}`).toLowerCase();
+  (s.hostname_override || `${s.slug}.${getDomain()}`).toLowerCase();
 
 /**
  * DOMAIN lives in .env and can change after servers exist, so re-derive

@@ -7,7 +7,7 @@ async function request(method, url, body, opts = {}) {
     ...opts,
   });
   if (res.status === 401) {
-    throw new Error('Not authenticated — Cloudflare Access did not pass an identity header.');
+    throw new Error('Not authenticated - Cloudflare Access did not pass an identity header.');
   }
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;
@@ -27,6 +27,8 @@ export const api = {
   health: () => request('GET', '/api/health'),
   meta: () => request('GET', '/api/servers/meta'),
   ports: () => request('GET', '/api/ports'),
+  settings: () => request('GET', '/api/settings'),
+  saveSettings: (body) => request('PUT', '/api/settings', body),
   routerInfo: () => request('GET', '/api/router'),
   routerSync: () => request('POST', '/api/router/sync'),
 

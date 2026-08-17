@@ -1,4 +1,4 @@
-/** Minimal Minecraft protocol codec — just enough for handshake/status/login. */
+/** Minimal Minecraft protocol codec - just enough for handshake/status/login. */
 
 export function readVarInt(buf, offset = 0) {
   let value = 0;

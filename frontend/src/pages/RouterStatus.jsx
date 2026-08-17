@@ -69,9 +69,9 @@ export default function RouterStatus() {
             {hosts.map((h) => (
               <tr key={h}>
                 <td className="mono small">{h}</td>
-                <td className="mono small">{live[h] || <span className="muted">—</span>}</td>
+                <td className="mono small">{live[h] || <span className="muted">-</span>}</td>
                 <td className={`mono small ${live[h] !== expected[h] ? 'badge-error' : ''}`}>
-                  {expected[h] || <span className="muted">—</span>}
+                  {expected[h] || <span className="muted">-</span>}
                 </td>
               </tr>
             ))}

@@ -51,11 +51,15 @@ export default function ServerDetail({ states = {}, onChange }) {
       <div className="row between wrap">
         <div style={{ minWidth: 0 }}>
           <h2>{server.name}</h2>
-          <div className="row small muted" style={{ gap: 6, marginTop: 2 }}>
-            <StatusDot state={state} />
-            <span>{PHASE_LABEL[state.phase] || '—'}</span>
-            {state.phase === 'ready' && <span>· {state.online ?? 0}{state.max ? `/${state.max}` : ''} online</span>}
-            <span>· {server.type} {server.version}</span>
+          <div className="row small muted" style={{ gap: 10, marginTop: 2 }}>
+            <span className="row" style={{ gap: 6 }}>
+              <StatusDot state={state} />
+              {PHASE_LABEL[state.phase] || 'Unknown'}
+            </span>
+            {state.phase === 'ready' && (
+              <span>{state.online ?? 0}{state.max ? `/${state.max}` : ''} online</span>
+            )}
+            <span>{server.type} {server.version}</span>
           </div>
         </div>
         <div className="row wrap" style={{ gap: 6 }}>

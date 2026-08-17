@@ -9,6 +9,7 @@ import Ports from './pages/Ports.jsx';
 import CreateServer from './pages/CreateServer.jsx';
 import ServerDetail from './pages/ServerDetail.jsx';
 import RouterStatus from './pages/RouterStatus.jsx';
+import GeneralSettings from './pages/GeneralSettings.jsx';
 
 export default function App() {
   const [me, setMe] = useState(null);
@@ -54,7 +55,6 @@ export default function App() {
         <Sidebar
           servers={servers}
           states={states}
-          me={me}
           open={menuOpen}
           onNavigate={() => setMenuOpen(false)}
         />
@@ -71,6 +71,7 @@ export default function App() {
               <Route path="/" element={<Overview servers={servers} states={states} me={me} onChange={loadServers} />} />
               <Route path="/ports" element={<Ports />} />
               <Route path="/router" element={<RouterStatus />} />
+              <Route path="/settings" element={<GeneralSettings onChange={() => { loadServers(); api.me().then(setMe).catch(() => {}); }} />} />
               <Route path="/new" element={<CreateServer onCreated={loadServers} />} />
               <Route path="/servers/:id/*" element={<ServerDetail states={states} onChange={loadServers} />} />
               <Route path="*" element={<div className="empty">Nothing here. <Link to="/">Overview</Link></div>} />

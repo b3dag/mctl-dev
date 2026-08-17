@@ -52,7 +52,7 @@ function handleConnection(socket) {
   socket.on('data', (chunk) => {
     buf = Buffer.concat([buf, chunk]);
 
-    // Legacy (<=1.6) server list ping — just hang up.
+    // Legacy (<=1.6) server list ping - just hang up.
     if (!handshake && buf[0] === 0xfe) return socket.destroy();
 
     let pkt;

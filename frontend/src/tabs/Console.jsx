@@ -42,7 +42,7 @@ export default function Console({ server, state }) {
           return;
         }
         if (msg.type === 'line') push(msg.data.line, classify(msg.data.line));
-        else if (msg.type === 'info') push(`— ${msg.data.message}`, 'sys');
+        else if (msg.type === 'info') push(`- ${msg.data.message}`, 'sys');
         else if (msg.type === 'error') push(`! ${msg.data.message}`, 'err');
         else if (msg.type === 'command') {
           push(`> ${msg.data.command}`, 'echo');
@@ -126,10 +126,6 @@ export default function Console({ server, state }) {
         />
         <button className="primary" disabled={!canSend || !cmd.trim()}>Send</button>
       </form>
-      <div className="small muted">
-        <code>stop</code> and <code>restart</code> are blocked here — use the buttons above so the
-        manager can update mc-router.
-      </div>
     </div>
   );
 }

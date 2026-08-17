@@ -77,7 +77,7 @@ async function main() {
 
 for (const sig of ['SIGTERM', 'SIGINT']) {
   process.on(sig, () => {
-    console.log(`[boot] ${sig} — shutting down`);
+    console.log(`[boot] ${sig} - shutting down`);
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(0), 5000).unref();
   });

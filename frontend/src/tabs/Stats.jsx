@@ -56,7 +56,7 @@ export default function Stats({ server, state }) {
         <div className="card stack">
           <div className="row between">
             <strong>CPU</strong>
-            <span className="mono">{data.current ? `${data.current.cpuPercent.toFixed(1)}%` : '—'}</span>
+            <span className="mono">{data.current ? `${data.current.cpuPercent.toFixed(1)}%` : '-'}</span>
           </div>
           <Spark points={cpu} color="#4ea1ff" label="CPU usage over time" />
           <div className="small muted">{history.length} samples, one per minute</div>
@@ -66,7 +66,7 @@ export default function Stats({ server, state }) {
           <div className="row between">
             <strong>Memory</strong>
             <span className="mono">
-              {data.current ? `${bytes(data.current.memUsed)} / ${bytes(data.current.memLimit)}` : '—'}
+              {data.current ? `${bytes(data.current.memUsed)} / ${bytes(data.current.memLimit)}` : '-'}
             </span>
           </div>
           <Spark points={mem} max={memLimit} color="#3fb950" label="Memory usage over time" />
@@ -76,7 +76,7 @@ export default function Stats({ server, state }) {
         <div className="card stack">
           <div className="row between">
             <strong>Disk</strong>
-            <span className="mono">{disk === undefined ? '—' : bytes(disk)}</span>
+            <span className="mono">{disk === undefined ? '-' : bytes(disk)}</span>
           </div>
           <div className="small muted">
             Measured inside the data volume; needs a short-lived helper container, so it is on demand.
@@ -89,8 +89,8 @@ export default function Stats({ server, state }) {
           <table>
             <tbody>
               <tr><td className="muted">Name</td><td className="mono small">{server.container}</td></tr>
-              <tr><td className="muted">Phase</td><td>{state.phase || '—'}</td></tr>
-              <tr><td className="muted">Players</td><td>{state.online ?? '—'}</td></tr>
+              <tr><td className="muted">Phase</td><td>{state.phase || '-'}</td></tr>
+              <tr><td className="muted">Players</td><td>{state.online ?? '-'}</td></tr>
               <tr><td className="muted">Network in</td><td>{bytes(data.current?.netRx)}</td></tr>
               <tr><td className="muted">Network out</td><td>{bytes(data.current?.netTx)}</td></tr>
             </tbody>

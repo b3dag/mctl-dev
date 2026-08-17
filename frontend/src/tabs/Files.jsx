@@ -35,7 +35,7 @@ export default function Files({ server }) {
 
   const open = (entry) => {
     if (entry.dir) return load(entry.path);
-    if (!entry.editable) return toast('Not a text file — use download instead');
+    if (!entry.editable) return toast('Not a text file - use download instead');
     run(async () => {
       const { content } = await api.readFile(server.id, entry.path);
       setEditing({ path: entry.path, content, dirty: false });
@@ -52,7 +52,7 @@ export default function Files({ server }) {
     run(async () => {
       await api.writeFile(server.id, editing.path, editing.content);
       setEditing((e) => ({ ...e, dirty: false }));
-    }, 'Saved — restart the server to apply');
+    }, 'Saved - restart the server to apply');
 
   const upload = (files) => {
     if (!files?.length) return;
@@ -145,8 +145,8 @@ export default function Files({ server }) {
                     {e.dir ? '📁' : '📄'} {e.name}
                   </button>
                 </td>
-                <td className="muted small">{e.dir ? '—' : bytes(e.size)}</td>
-                <td className="muted small">{e.mtime ? new Date(e.mtime).toLocaleString() : '—'}</td>
+                <td className="muted small">{e.dir ? '-' : bytes(e.size)}</td>
+                <td className="muted small">{e.mtime ? new Date(e.mtime).toLocaleString() : '-'}</td>
                 <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                   <a className="btn sm" href={api.downloadUrl(server.id, e.path, e.dir)} download>get</a>{' '}
                   <button

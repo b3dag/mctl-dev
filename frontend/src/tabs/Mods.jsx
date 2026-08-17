@@ -39,7 +39,7 @@ export default function Mods({ server }) {
     run(async () => {
       await api.installMod(server.id, body);
       load();
-    }, `${label} installed — restart to apply`);
+    }, `${label} installed - restart to apply`);
 
   return (
     <div className="stack">
@@ -66,7 +66,7 @@ export default function Mods({ server }) {
             run(async () => {
               await api.uploadMods(server.id, fd);
               load();
-            }, 'Uploaded — restart to apply');
+            }, 'Uploaded - restart to apply');
           }}
         />
 
@@ -126,7 +126,7 @@ export default function Mods({ server }) {
               <div className="small muted" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {h.description}
               </div>
-              <div className="small muted">{h.downloads.toLocaleString()} downloads · {h.author}</div>
+              <div className="small muted">{h.downloads.toLocaleString()} downloads {h.author}</div>
             </div>
             <button className="sm primary" disabled={busy} onClick={() => install({ projectId: h.id }, h.title)}>
               install
@@ -147,10 +147,6 @@ export default function Mods({ server }) {
           <button disabled={busy || !url.trim()} onClick={() => install({ url: url.trim() }, 'Jar')}>
             Install
           </button>
-        </div>
-        <div className="small muted">
-          HTTPS only. CurseForge downloads need an API key in <code>.env</code> and are best set through
-          the image's own <code>CURSEFORGE_FILES</code> variable under Settings.
         </div>
       </div>
     </div>

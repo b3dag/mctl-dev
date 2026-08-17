@@ -105,7 +105,7 @@ export default function CreateServer({ onCreated }) {
           <div className="hint">
             {form.hostPort
               ? <>Also reachable at <code className="mono">{me?.publicHost || 'your-host'}:{form.hostPort}</code>, no DNS needed.</>
-              : <>Leave empty to use the hostname above. Set a port to publish this server directly as well — the simplest option if you don't want to configure DNS.</>}
+              : <>Leave empty to use the hostname above. Set a port to publish this server directly as well - the simplest option if you don't want to configure DNS.</>}
           </div>
         </div>
 

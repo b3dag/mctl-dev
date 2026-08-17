@@ -77,7 +77,7 @@ async function handleConsole(ws, user, id) {
   const attach = async () => {
     const st = await containerState(server.container_name);
     if (!st.exists) return send('info', { message: 'container does not exist yet' });
-    if (!st.running) return send('info', { message: 'server is stopped — start it to see live output' });
+    if (!st.running) return send('info', { message: 'server is stopped - start it to see live output' });
     try {
       logStream = await followLogs(server.container_name, { tail: 300 });
       let carry = '';

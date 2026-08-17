@@ -79,7 +79,7 @@ export const PHASE_LABEL = {
   stopped: 'Stopped',
   unhealthy: 'No RCON',
   missing: 'No container',
-  unknown: '—',
+  unknown: '-',
 };
 
 export function StatusPill({ state }) {
@@ -89,14 +89,14 @@ export function StatusPill({ state }) {
       <StatusDot state={state} />
       {PHASE_LABEL[phase] || phase}
       {phase === 'ready' && state?.online !== undefined && (
-        <span className="muted">· {state.online}{state.max ? `/${state.max}` : ''}</span>
+        <span className="muted"> {state.online}{state.max ? `/${state.max}` : ''}</span>
       )}
     </span>
   );
 }
 
 export function bytes(n) {
-  if (n === null || n === undefined) return '—';
+  if (n === null || n === undefined) return '-';
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   let v = Number(n);
   let i = 0;
@@ -108,7 +108,7 @@ export function bytes(n) {
 }
 
 export function when(iso) {
-  if (!iso) return '—';
+  if (!iso) return '-';
   const d = new Date(iso);
   const diff = (Date.now() - d.getTime()) / 1000;
   if (diff < 60) return 'just now';

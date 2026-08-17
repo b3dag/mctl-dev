@@ -2,19 +2,41 @@ import { Router } from 'express';
 import { config } from '../config.js';
 import { docker } from '../docker.js';
 import { currentRoutes, routerStatus, syncRoutes, buildMappings } from '../router.js';
-import { allStates, refreshAll, stateOf } from '../servers.js';
+import { allStates, refreshAll, stateOf, migrateHostnames } from '../servers.js';
 import { db, listServers } from '../db.js';
 import { inspectSafe } from '../docker.js';
+import { getSettings, saveSettings, getDomain, getPublicHost } from '../settings.js';
 
 export const router = Router();
 
 router.get('/me', (req, res) => {
   res.json({
     email: req.user,
-    domain: config.domain,
-    publicHost: config.publicHost,
+    domain: getDomain(),
+    publicHost: getPublicHost(),
     publicMcPort: config.publicMcPort,
   });
+});
+
+router.get('/settings', (_req, res) => {
+  res.json({ settings: getSettings(), publicMcPort: config.publicMcPort });
+});
+
+router.put('/settings', async (req, res, next) => {
+  try {
+    const { settings, changed } = saveSettings(req.body || {}, req.user);
+    // Hostnames are derived from the domain, so a change has to propagate to
+    // every server and then to the router's table.
+    let rehosted = [];
+    if (changed.includes('domain')) {
+      rehosted = migrateHostnames();
+      await refreshAll();
+      await syncRoutes(allStates());
+    }
+    res.json({ settings, changed, rehosted });
+  } catch (e) {
+    next(e);
+  }
 });
 
 /**
@@ -42,7 +64,7 @@ router.get('/ports', async (_req, res, next) => {
           actualPort: actual,
           pendingRestart: (s.host_port || null) !== actual,
           running: !!stateOf(s.id).running,
-          address: s.host_port ? `${config.publicHost}:${s.host_port}` : s.hostname,
+          address: s.host_port ? `${getPublicHost()}:${s.host_port}` : s.hostname,
         };
       })
     );
@@ -54,16 +76,13 @@ router.get('/ports', async (_req, res, next) => {
     }
 
     res.json({
-      publicHost: config.publicHost,
-      shared: {
-        port: config.publicMcPort,
-        description: 'mc-router — every server reachable by hostname on this one port',
-      },
+      publicHost: getPublicHost(),
+      shared: { port: config.publicMcPort, description: 'mc-router, shared by every hostname' },
       internal: [
-        { port: 25565, scope: 'container', description: 'each server, on the internal network only' },
-        { port: 25575, scope: 'container', description: 'RCON, internal network only — never published' },
+        { port: 25565, scope: 'each server', description: 'game port, internal network only' },
+        { port: 25575, scope: 'each server', description: 'RCON, never published' },
         { port: config.wakerPort, scope: 'manager', description: 'waker, reached by mc-router only' },
-        { port: config.port, scope: 'manager', description: 'this web UI, published only through the tunnel' },
+        { port: config.port, scope: 'manager', description: 'web UI, served through the tunnel' },
       ],
       servers: entries,
       conflicts: Object.entries(duplicates)

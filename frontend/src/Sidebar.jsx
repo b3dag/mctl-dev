@@ -6,14 +6,14 @@ const SYSTEM = [
   ['/', 'Overview', true],
   ['/ports', 'Ports'],
   ['/router', 'Router'],
+  ['/settings', 'Settings'],
 ];
 
-export default function Sidebar({ servers, states, me, open, onNavigate }) {
+export default function Sidebar({ servers, states, open, onNavigate }) {
   return (
     <nav className={`sidebar${open ? ' open' : ''}`} onClick={onNavigate}>
       <div className="sidebar-head">
         <Link to="/" className="brand">mctl</Link>
-        <div className="sidebar-user">{me?.email || ' '}</div>
       </div>
 
       <div className="nav-group">

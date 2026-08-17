@@ -108,7 +108,7 @@ export async function rename(server, from, to) {
   if (code !== 0) throw httpError(500, output.trim() || 'rename failed');
 }
 
-/** Stream a directory (or file) out as a zip — used for world downloads. */
+/** Stream a directory (or file) out as a zip - used for world downloads. */
 export async function zipStream(server, rel, res) {
   const full = safePath(rel);
   const source = await getArchiveStream(server.container_name, full);

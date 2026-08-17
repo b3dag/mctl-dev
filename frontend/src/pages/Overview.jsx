@@ -24,10 +24,10 @@ export default function Overview({ servers, states, me, onChange }) {
       <div className="card">
         <dl className="kv">
           <dt>Base domain</dt>
-          <dd className="mono">{me?.domain || '—'}</dd>
+          <dd className="mono">{me?.domain || '-'}</dd>
           <dt>Shared port</dt>
           <dd className="mono">
-            {me?.publicMcPort ?? 25565} <span className="muted">— mc-router, by hostname</span>
+            {me?.publicMcPort ?? 25565} <span className="muted">- mc-router, by hostname</span>
           </dd>
           <dt>Servers</dt>
           <dd>{servers.length} total, {running} running, {players} player{players === 1 ? '' : 's'} online</dd>
@@ -36,7 +36,7 @@ export default function Overview({ servers, states, me, onChange }) {
 
       {servers.length === 0 ? (
         <div className="card empty">
-          No servers yet. <Link to="/new">Create one</Link> — it gets a hostname under your domain,
+          No servers yet. <Link to="/new">Create one</Link> - it gets a hostname under your domain,
           and optionally its own port.
         </div>
       ) : (
@@ -74,7 +74,7 @@ export default function Overview({ servers, states, me, onChange }) {
                     <td>
                       <span className="row" style={{ gap: 6 }}>
                         <StatusDot state={state} />
-                        <span className="small">{PHASE_LABEL[state.phase] || '—'}</span>
+                        <span className="small">{PHASE_LABEL[state.phase] || '-'}</span>
                       </span>
                       {state.phase === 'ready' && (
                         <div className="muted small">{state.online ?? 0}{state.max ? `/${state.max}` : ''} online</div>

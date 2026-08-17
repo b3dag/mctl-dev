@@ -19,7 +19,7 @@ all.
   browser           │  cloudflared ─► manager:8080 ─► Docker API    │
   mc.example.com    │                              └► RCON :25575   │
                     └──────────────────────────────────────────────┘
-                       internal network — nothing else is published
+                       internal network - nothing else is published
 ```
 
 ## How it fits together
@@ -30,7 +30,7 @@ connection to the matching backend container. Players connect to
 host.
 
 **Each server** is its own container on the internal `mctl-net` network with a
-named data volume. Nothing is published — not the game port, not RCON. The
+named data volume. Nothing is published - not the game port, not RCON. The
 manager reaches RCON at `mc-<slug>:25575` over Docker's internal DNS, which is
 how you get full RCON control without opening anything.
 
@@ -62,7 +62,7 @@ docker compose up -d
 ```
 
 That brings up mc-router, the manager and the Cloudflare tunnel. There are no
-default servers — create the first one in the UI.
+default servers - create the first one in the UI.
 
 ### DNS
 
@@ -82,7 +82,7 @@ The app has no login of its own. Put the tunnel hostname behind a Cloudflare
 Access application; the backend trusts the `Cf-Access-Authenticated-User-Email`
 header Access injects, and rejects any request without it.
 
-That trust is only safe because port 8080 is never published to the host — the
+That trust is only safe because port 8080 is never published to the host - the
 tunnel is the only way in. If you expose it some other way, put an equivalent
 authenticating proxy in front, and optionally set `ALLOWED_EMAILS` as a second
 check.
@@ -107,46 +107,42 @@ Everything lives in `.env`:
 
 ### Changing the domain later
 
-Hostnames are always derived as `<slug>.<DOMAIN>`, so moving every server to a
-new domain is one edit:
+Open **Settings** in the UI and edit the base domain. Every server's address is
+re-derived, mc-router's table is rewritten straight away, and the page lists
+what moved. Containers, worlds and volumes are untouched.
 
-```bash
-sed -i 's/^DOMAIN=.*/DOMAIN=mc.example.com/' .env
-docker compose up -d
-```
-
-On boot the manager re-derives each server's hostname, rewrites mc-router's
-table (dropping the old names and registering the new ones), and logs what it
-moved. Containers, worlds and volumes are untouched — only the name players
-connect to changes. Point the new wildcard record at the host and you're done.
+The value is stored in the database, so it overrides `DOMAIN` from `.env` and
+survives a restart. `.env` is only the starting default for a fresh install.
 
 ### Per-server join addresses
 
 A server's **Join address** under Settings overrides the derived name, so one
-server can live outside the wildcard — `play.example.com` alongside
+server can live outside the wildcard - `play.example.com` alongside
 `creative.mc.example.com`. It applies immediately (mc-router is updated without
 touching the container), and clearing it goes back to `<slug>.<DOMAIN>` and to
 following future `DOMAIN` changes. Make sure DNS for a custom address points at
 the host running mc-router.
 
 The slug itself stays fixed, because it also names the container and its data
-volume — the address players type is independent of that.
+volume - the address players type is independent of that.
 
 ### Two ways to reach a server
 
 **By hostname, through mc-router** (the default). Every server shares port
 25565 and is told apart by the hostname in the handshake. One port to forward,
-but it needs DNS — a wildcard record covers every server at once.
+but it needs DNS - a wildcard record covers every server at once.
 
 **On its own port.** Set a **Direct port** on a server and mctl publishes its
 container on that host port as well, bypassing mc-router entirely. Players
 connect to `your-host:25570` with no DNS involved. Useful if you don't own a
 domain, or for one server you want reachable by IP.
 
-The two aren't exclusive — a server with a direct port is still reachable by its
+The two aren't exclusive - a server with a direct port is still reachable by its
 hostname too. The **Ports** page lists exactly what is open on the host, what is
 reachable by hostname, and what stays internal (RCON and the waker are never
 published), so you can see at a glance what needs forwarding on your firewall.
+It is laid out as one row per address, with the port and the domain side by
+side.
 
 Ports are validated when you set them: out of range, already taken by another
 server, or clashing with mc-router's own port are all refused with a reason
@@ -155,36 +151,36 @@ rather than failing later at container start.
 ## What the UI does
 
 A sidebar lists your servers with live status, plus the general pages
-(Overview, Ports, Router). On a phone it collapses into a drawer.
+(Overview, Ports, Router, Settings). On a phone it collapses into a drawer.
 
-**Overview** — the base domain, the shared port, and a table of every server
+**Overview** - the base domain, the shared port, and a table of every server
 with its address, status, player count and quick actions.
 
-**Console** — the container's log stream over a WebSocket, with a command input
+**Console** - the container's log stream over a WebSocket, with a command input
 that goes out over RCON. `stop` and `restart` are refused here so the manager
 stays the only thing driving lifecycle; use the buttons.
 
-**Players** — online list, kick, ban, ban-ip, pardon, op/deop, whitelist add and
+**Players** - online list, kick, ban, ban-ip, pardon, op/deop, whitelist add and
 remove, all RCON.
 
-**Files** — browse `/data`, edit `server.properties`, `whitelist.json`,
+**Files** - browse `/data`, edit `server.properties`, `whitelist.json`,
 `ops.json`, `banned-players.json` and friends in the browser, upload, delete,
 rename, and download any folder (including the world) as a zip.
 
-**Mods** — for Paper/Spigot/Purpur/Fabric/Forge/NeoForge/Quilt: list installed
+**Mods** - for Paper/Spigot/Purpur/Fabric/Forge/NeoForge/Quilt: list installed
 jars, enable/disable (rename to `.disabled`), remove, upload, install from a
 direct HTTPS URL, or search Modrinth filtered to the server's loader and game
 version.
 
-**Backups** — snapshot the world (or all of `/data`) straight out of the
+**Backups** - snapshot the world (or all of `/data`) straight out of the
 container filesystem; running servers get `save-off` + `save-all flush` first so
 the snapshot is consistent. Schedule with cron, keep the last N, download as
 `.tar.gz` or `.zip`, restore with confirmation.
 
-**Stats** — CPU and memory from Docker stats with a rolling history, plus disk
+**Stats** - CPU and memory from Docker stats with a rolling history, plus disk
 usage of the data volume on demand.
 
-**Settings** — a form over the environment variables the itzg image supports
+**Settings** - a form over the environment variables the itzg image supports
 (difficulty, gamemode, MOTD, view distance, …) plus an escape hatch for any
 other variable. Applying recreates the container against the same volume, so
 worlds, mods and configs survive.
@@ -192,7 +188,7 @@ worlds, mods and configs survive.
 ## Deployment notes
 
 **Docker socket.** The manager talks to the Docker API directly through
-`/var/run/docker.sock` — no shelling out to the CLI — so it behaves the same on
+`/var/run/docker.sock` - no shelling out to the CLI - so it behaves the same on
 Oracle Cloud Free Tier, a Debian box, or anywhere else. It runs as root inside
 its container to reach the socket. Mounting the socket is equivalent to giving
 the manager root on the host; that is inherent to managing containers this way,
@@ -219,7 +215,7 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 ```
 
 The dev overlay publishes the manager on `127.0.0.1:8080`. With enforcement off,
-anyone who can reach that port controls every server — don't use the overlay on
+anyone who can reach that port controls every server - don't use the overlay on
 an exposed host.
 
 For frontend work, `cd frontend && npm run dev` proxies `/api` (and the

@@ -121,9 +121,6 @@ export default function Players({ server, state }) {
           <button className="sm ghost" onClick={loadWhitelist}>load</button>
         </div>
         {whitelist ? <div className="small mono">{whitelist}</div> : <div className="small muted">Not loaded.</div>}
-        <div className="small muted">
-          Whitelist enforcement itself is a server setting — toggle <code>ENABLE_WHITELIST</code> under Settings.
-        </div>
       </div>
     </div>
   );

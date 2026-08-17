@@ -50,7 +50,7 @@ async function tick() {
       const since = idleSince.get(server.id) ?? Date.now();
       idleSince.set(server.id, since);
       if (Date.now() - since >= timeout * 60000) {
-        console.log(`[monitor] ${server.slug} idle for ${timeout}m — stopping`);
+        console.log(`[monitor] ${server.slug} idle for ${timeout}m - stopping`);
         audit('system', server.id, 'server.autostop', `idle ${timeout}m`);
         idleSince.delete(server.id);
         await stopServer(server.id, 'system', { reason: `idle ${timeout}m` }).catch((e) =>
@@ -77,7 +77,7 @@ async function healRoutes() {
   const keys = new Set([...Object.keys(live), ...Object.keys(expected)]);
   const drifted = [...keys].some((k) => live[k] !== expected[k]);
   if (drifted) {
-    console.log('[monitor] mc-router routes drifted — resyncing');
+    console.log('[monitor] mc-router routes drifted - resyncing');
     await syncRoutes(allStates()).catch((e) => console.error('[monitor] resync failed:', e.message));
   }
 }
@@ -89,7 +89,7 @@ export function startMonitor() {
   return t;
 }
 
-/** Disk usage of a server's volume — needs a helper container, so it's on demand. */
+/** Disk usage of a server's volume - needs a helper container, so it's on demand. */
 export async function diskUsage(server) {
   const { output } = await runHelper(server.volume_name, 'du -sk /data 2>/dev/null | cut -f1');
   const kb = Number(String(output).trim().split(/\s+/)[0]);

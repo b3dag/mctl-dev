@@ -160,12 +160,12 @@ export async function writeFileToContainer(containerName, filePath, buffer, mode
   await docker.getContainer(containerName).putArchive(pack, { path: dir });
 }
 
-/** Raw tar stream of a container path — used for backups and folder downloads. */
+/** Raw tar stream of a container path - used for backups and folder downloads. */
 export async function getArchiveStream(containerName, dirPath) {
   return docker.getContainer(containerName).getArchive({ path: dirPath });
 }
 
-/** Push a tar stream into a container path — used for restores and uploads. */
+/** Push a tar stream into a container path - used for restores and uploads. */
 export async function putArchiveStream(containerName, dirPath, stream) {
   await docker.getContainer(containerName).putArchive(stream, { path: dirPath });
 }

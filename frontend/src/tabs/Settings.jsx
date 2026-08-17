@@ -46,7 +46,7 @@ export default function Settings({ server, me, onSaved }) {
         apply,
       });
       onSaved?.();
-    }, apply ? 'Saved — container recreated' : 'Saved (not yet applied)');
+    }, apply ? 'Saved - container recreated' : 'Saved (not yet applied)');
 
   const catalogKeys = new Set((meta?.envCatalog || []).flatMap((g) => g.vars.map((v) => v.key)));
   const extraEnv = Object.entries(env).filter(([k]) => !catalogKeys.has(k));
@@ -93,7 +93,7 @@ export default function Settings({ server, me, onSaved }) {
           <div className="hint">
             {core.host_port
               ? <>Also reachable at <code className="mono">{me?.publicHost || 'your-host'}:{core.host_port}</code> without DNS. Forward this port on your firewall.</>
-              : <>Only reachable by hostname through mc-router on port {me?.publicMcPort ?? 25565}. Set a port here to publish it directly as well — useful if you don't want to set up DNS.</>}
+              : <>Only reachable by hostname through mc-router on port {me?.publicMcPort ?? 25565}. Set a port here to publish it directly as well - useful if you don't want to set up DNS.</>}
             {' '}Changing this recreates the container.
           </div>
         </div>
@@ -199,7 +199,7 @@ export default function Settings({ server, me, onSaved }) {
 
       <div className="card row wrap between">
         <div className="small muted">
-          Applying recreates the container against the same data volume — worlds, mods and configs stay.
+          Applying recreates the container against the same data volume - worlds, mods and configs stay.
         </div>
         <div className="row" style={{ gap: 8 }}>
           <button disabled={busy} onClick={() => save(false)}>Save only</button>
