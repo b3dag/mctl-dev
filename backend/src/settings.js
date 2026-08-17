@@ -49,6 +49,17 @@ export function normalizeHost(input, label) {
   return host;
 }
 
+/**
+ * A server is reachable two ways at once: always by hostname through
+ * mc-router, and additionally on its own host port if one is set. Both are
+ * derived here so every view agrees on what to tell players.
+ */
+export const routerAddress = (server) =>
+  config.publicMcPort === 25565 ? server.hostname : `${server.hostname}:${config.publicMcPort}`;
+
+export const directAddress = (server) =>
+  server.host_port ? `${getPublicHost()}:${server.host_port}` : null;
+
 export function getSettings() {
   return {
     domain: getDomain(),

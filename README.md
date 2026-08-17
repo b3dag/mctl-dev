@@ -137,12 +137,11 @@ container on that host port as well, bypassing mc-router entirely. Players
 connect to `your-host:25570` with no DNS involved. Useful if you don't own a
 domain, or for one server you want reachable by IP.
 
-The two aren't exclusive - a server with a direct port is still reachable by its
-hostname too. The **Ports** page lists exactly what is open on the host, what is
-reachable by hostname, and what stays internal (RCON and the waker are never
-published), so you can see at a glance what needs forwarding on your firewall.
-It is laid out as one row per address, with the port and the domain side by
-side.
+The two are not exclusive. A server with a direct port stays reachable by its
+hostname as well, so the **Ports** page shows both per server: a router address
+column and a direct connection column, with `none` where no direct port is set.
+Below that it lists what is actually open on the host, and what stays internal
+(RCON and the waker are never published).
 
 Ports are validated when you set them: out of range, already taken by another
 server, or clashing with mc-router's own port are all refused with a reason

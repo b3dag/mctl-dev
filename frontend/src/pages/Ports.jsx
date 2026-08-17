@@ -3,6 +3,11 @@ import { Link } from 'react-router-dom';
 import { api } from '../api.js';
 import { useToast } from '../ui.jsx';
 
+function Address({ value, onCopy }) {
+  if (!value) return <span className="muted">none</span>;
+  return <button className="link mono" onClick={() => onCopy(value)}>{value}</button>;
+}
+
 export default function Ports() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -22,29 +27,14 @@ export default function Ports() {
     toast('Copied');
   };
 
-  // One row per way a player can connect: the shared router port for every
-  // hostname, plus a row for each server published on its own port.
-  const rows = [];
-  for (const s of data.servers) {
-    rows.push({
-      key: `${s.id}-host`,
-      port: data.shared.port,
-      domain: s.hostname,
-      server: s,
-      via: 'mc-router',
-    });
-    if (s.hostPort) {
-      rows.push({
-        key: `${s.id}-direct`,
-        port: s.hostPort,
-        domain: data.publicHost,
-        server: s,
-        via: 'direct',
-        pendingRestart: s.pendingRestart,
-      });
-    }
-  }
-  rows.sort((a, b) => a.port - b.port || a.domain.localeCompare(b.domain));
+  // What the operator has to open on the firewall: the shared router port,
+  // plus one entry per directly published server.
+  const open = [
+    { port: data.shared.port, used: data.shared.description, id: 'shared' },
+    ...data.servers
+      .filter((s) => s.hostPort)
+      .map((s) => ({ port: s.hostPort, used: `${s.name}, direct`, id: s.id, pending: s.pendingRestart })),
+  ].sort((a, b) => a.port - b.port);
 
   return (
     <div className="stack">
@@ -60,35 +50,51 @@ export default function Ports() {
       )}
 
       <div className="card">
+        <div className="card-head"><h3>How players reach each server</h3></div>
+        <table>
+          <thead>
+            <tr>
+              <th style={{ width: 150 }}>Server</th>
+              <th>Router address</th>
+              <th>Direct connection</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.servers.map((s) => (
+              <tr key={s.id}>
+                <td><Link to={`/servers/${s.id}`}>{s.name}</Link></td>
+                <td><Address value={s.routerAddress} onCopy={copy} /></td>
+                <td>
+                  <Address value={s.directAddress} onCopy={copy} />
+                  {s.pendingRestart && (
+                    <div className="err-text small">Not applied yet, recreate the container</div>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {data.servers.length === 0 && (
+              <tr><td colSpan={3} className="muted small">No servers yet.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="card">
         <div className="card-head"><h3>Open on the host</h3></div>
         <table>
           <thead>
             <tr>
               <th style={{ width: 80 }}>Port</th>
-              <th>Domain</th>
-              <th style={{ width: 160 }}>Server</th>
-              <th style={{ width: 90 }}>Via</th>
+              <th>Used by</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={r.key}>
-                <td className="mono">{r.port}</td>
-                <td>
-                  <button className="link mono" onClick={() => copy(r.via === 'direct' ? `${r.domain}:${r.port}` : r.domain)}>
-                    {r.domain}
-                  </button>
-                  {r.pendingRestart && (
-                    <div className="err-text small">Not applied yet, recreate the container</div>
-                  )}
-                </td>
-                <td><Link to={`/servers/${r.server.id}`}>{r.server.name}</Link></td>
-                <td className="muted small">{r.via}</td>
+            {open.map((o) => (
+              <tr key={o.id}>
+                <td className="mono">{o.port}</td>
+                <td>{o.used}</td>
               </tr>
             ))}
-            {rows.length === 0 && (
-              <tr><td colSpan={4} className="muted small">No servers yet.</td></tr>
-            )}
           </tbody>
         </table>
       </div>
@@ -99,7 +105,7 @@ export default function Ports() {
           <thead>
             <tr>
               <th style={{ width: 80 }}>Port</th>
-              <th style={{ width: 160 }}>Where</th>
+              <th style={{ width: 150 }}>Where</th>
               <th>What</th>
             </tr>
           </thead>

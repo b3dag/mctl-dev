@@ -53,7 +53,6 @@ export default function Overview({ servers, states, me, onChange }) {
             <tbody>
               {servers.map((s) => {
                 const state = states[s.id] || s.state || {};
-                const address = s.hostPort ? `${me?.publicHost || ''}:${s.hostPort}` : s.hostname;
                 return (
                   <tr key={s.id}>
                     <td>
@@ -62,14 +61,23 @@ export default function Overview({ servers, states, me, onChange }) {
                     </td>
                     <td>
                       <button
-                        className="ghost sm mono"
-                        style={{ padding: 0, justifyContent: 'flex-start' }}
-                        title="Copy address"
-                        onClick={() => { navigator.clipboard?.writeText(address); toast('Address copied'); }}
+                        className="link mono"
+                        title="Copy router address"
+                        onClick={() => { navigator.clipboard?.writeText(s.routerAddress); toast('Copied'); }}
                       >
-                        {address}
+                        {s.routerAddress}
                       </button>
-                      {s.hostPort && <div className="muted small">direct port</div>}
+                      {s.directAddress && (
+                        <div>
+                          <button
+                            className="link mono muted"
+                            title="Copy direct address"
+                            onClick={() => { navigator.clipboard?.writeText(s.directAddress); toast('Copied'); }}
+                          >
+                            {s.directAddress}
+                          </button>
+                        </div>
+                      )}
                     </td>
                     <td>
                       <span className="row" style={{ gap: 6 }}>

@@ -44,7 +44,6 @@ export default function ServerDetail({ states = {}, onChange }) {
 
   const state = states[id] || server.state || {};
   const act = (fn, msg) => run(async () => { await fn(id); load(); onChange?.(); }, msg);
-  const address = server.hostPort ? `${me?.publicHost || ''}:${server.hostPort}` : server.hostname;
 
   return (
     <div className="stack">
@@ -75,17 +74,37 @@ export default function ServerDetail({ states = {}, onChange }) {
         </div>
       </div>
 
-      <div className="card row between wrap" style={{ gap: 8 }}>
-        <div style={{ minWidth: 0 }}>
-          <div className="muted small">Players connect to</div>
-          <div className="mono" style={{ wordBreak: 'break-all' }}>{address}</div>
-        </div>
-        <button
-          className="sm"
-          onClick={() => { navigator.clipboard?.writeText(address); toast('Address copied'); }}
-        >
-          Copy
-        </button>
+      <div className="card">
+        <table>
+          <tbody>
+            <tr>
+              <td style={{ width: 150 }} className="muted">Router address</td>
+              <td>
+                <button
+                  className="link mono"
+                  onClick={() => { navigator.clipboard?.writeText(server.routerAddress); toast('Copied'); }}
+                >
+                  {server.routerAddress}
+                </button>
+              </td>
+            </tr>
+            <tr>
+              <td className="muted">Direct connection</td>
+              <td>
+                {server.directAddress ? (
+                  <button
+                    className="link mono"
+                    onClick={() => { navigator.clipboard?.writeText(server.directAddress); toast('Copied'); }}
+                  >
+                    {server.directAddress}
+                  </button>
+                ) : (
+                  <span className="muted">none, set a direct port under Settings</span>
+                )}
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
       <nav className="tabs">

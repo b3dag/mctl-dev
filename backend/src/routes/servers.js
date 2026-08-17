@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { db, getServer, listServers, audit } from '../db.js';
 import { ENV_CATALOG, SERVER_TYPES } from '../envcatalog.js';
+import { routerAddress, directAddress } from '../settings.js';
 import {
   createServer,
   startServer,
@@ -36,6 +37,8 @@ const shape = (s) => ({
   hostname: s.hostname,
   hostnameOverride: s.hostname_override || '',
   hostPort: s.host_port || null,
+  routerAddress: routerAddress(s),
+  directAddress: directAddress(s),
   container: s.container_name,
   type: s.type,
   version: s.version,

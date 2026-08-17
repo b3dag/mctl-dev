@@ -5,7 +5,7 @@ import { currentRoutes, routerStatus, syncRoutes, buildMappings } from '../route
 import { allStates, refreshAll, stateOf, migrateHostnames } from '../servers.js';
 import { db, listServers } from '../db.js';
 import { inspectSafe } from '../docker.js';
-import { getSettings, saveSettings, getDomain, getPublicHost } from '../settings.js';
+import { getSettings, saveSettings, getDomain, getPublicHost, routerAddress, directAddress } from '../settings.js';
 
 export const router = Router();
 
@@ -64,7 +64,10 @@ router.get('/ports', async (_req, res, next) => {
           actualPort: actual,
           pendingRestart: (s.host_port || null) !== actual,
           running: !!stateOf(s.id).running,
-          address: s.host_port ? `${getPublicHost()}:${s.host_port}` : s.hostname,
+          // Every server has a router address. The direct one is extra, not a
+          // replacement, so both are reported and the UI can say so.
+          routerAddress: routerAddress(s),
+          directAddress: directAddress(s),
         };
       })
     );
