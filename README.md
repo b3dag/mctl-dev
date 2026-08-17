@@ -94,7 +94,8 @@ Everything lives in `.env`:
 | Variable | Purpose |
 | --- | --- |
 | `DOMAIN` | Base domain; each server's hostname is `<slug>.<DOMAIN>` |
-| `MC_PORT` | Host port for mc-router (default 25565) |
+| `MC_PORT` | Shared host port for mc-router (default 25565) |
+| `PUBLIC_HOST` | Address shown for directly published servers; defaults to `DOMAIN` |
 | `TUNNEL_TOKEN` | Cloudflare Tunnel token |
 | `COMPOSE_PROFILES` | `tunnel` to run cloudflared; empty to skip it |
 | `REQUIRE_CF_ACCESS` | Enforce the identity header (keep `true`) |
@@ -131,10 +132,33 @@ the host running mc-router.
 The slug itself stays fixed, because it also names the container and its data
 volume — the address players type is independent of that.
 
+### Two ways to reach a server
+
+**By hostname, through mc-router** (the default). Every server shares port
+25565 and is told apart by the hostname in the handshake. One port to forward,
+but it needs DNS — a wildcard record covers every server at once.
+
+**On its own port.** Set a **Direct port** on a server and mctl publishes its
+container on that host port as well, bypassing mc-router entirely. Players
+connect to `your-host:25570` with no DNS involved. Useful if you don't own a
+domain, or for one server you want reachable by IP.
+
+The two aren't exclusive — a server with a direct port is still reachable by its
+hostname too. The **Ports** page lists exactly what is open on the host, what is
+reachable by hostname, and what stays internal (RCON and the waker are never
+published), so you can see at a glance what needs forwarding on your firewall.
+
+Ports are validated when you set them: out of range, already taken by another
+server, or clashing with mc-router's own port are all refused with a reason
+rather than failing later at container start.
+
 ## What the UI does
 
-**Dashboard** — every server with live status, player count, and start / stop /
-restart / console.
+A sidebar lists your servers with live status, plus the general pages
+(Overview, Ports, Router). On a phone it collapses into a drawer.
+
+**Overview** — the base domain, the shared port, and a table of every server
+with its address, status, player count and quick actions.
 
 **Console** — the container's log stream over a WebSocket, with a command input
 that goes out over RCON. `stop` and `restart` are refused here so the manager

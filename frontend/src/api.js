@@ -26,6 +26,7 @@ export const api = {
   me: () => request('GET', '/api/me'),
   health: () => request('GET', '/api/health'),
   meta: () => request('GET', '/api/servers/meta'),
+  ports: () => request('GET', '/api/ports'),
   routerInfo: () => request('GET', '/api/router'),
   routerSync: () => request('POST', '/api/router/sync'),
 

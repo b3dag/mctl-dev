@@ -2,11 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useAsync } from '../ui.jsx';
 
-export default function Settings({ server, onSaved }) {
+export default function Settings({ server, me, onSaved }) {
   const [meta, setMeta] = useState(null);
   const [core, setCore] = useState({
     name: server.name,
     hostname: server.hostnameOverride || '',
+    host_port: server.hostPort ? String(server.hostPort) : '',
     type: server.type,
     version: server.version,
     memory: server.memory,
@@ -39,6 +40,7 @@ export default function Settings({ server, onSaved }) {
     run(async () => {
       await api.updateServer(server.id, {
         ...core,
+        host_port: core.host_port === '' ? null : Number(core.host_port),
         idle_timeout_minutes: Number(core.idle_timeout_minutes),
         env,
         apply,
@@ -68,11 +70,31 @@ export default function Settings({ server, onSaved }) {
             autoCapitalize="off"
             spellCheck={false}
           />
-          <div className="small muted" style={{ marginTop: 6 }}>
+          <div className="hint">
             {core.hostname.trim()
               ? 'Custom address. Make sure DNS for it points at this host.'
-              : `Using the default for this server's slug. Leave empty to keep tracking the DOMAIN setting.`}{' '}
-            Takes effect immediately — mc-router is updated without restarting the server.
+              : `Using the default for this server's slug. Leave empty to keep tracking the base domain.`}{' '}
+            Applied immediately, without restarting the server.
+          </div>
+        </div>
+
+        <div className="field">
+          <label>Direct port (optional)</label>
+          <input
+            className="mono"
+            type="number"
+            min="1024"
+            max="65535"
+            style={{ maxWidth: 160 }}
+            value={core.host_port}
+            onChange={setCoreField('host_port')}
+            placeholder="none"
+          />
+          <div className="hint">
+            {core.host_port
+              ? <>Also reachable at <code className="mono">{me?.publicHost || 'your-host'}:{core.host_port}</code> without DNS. Forward this port on your firewall.</>
+              : <>Only reachable by hostname through mc-router on port {me?.publicMcPort ?? 25565}. Set a port here to publish it directly as well — useful if you don't want to set up DNS.</>}
+            {' '}Changing this recreates the container.
           </div>
         </div>
         <div className="row wrap" style={{ gap: 12 }}>
@@ -99,9 +121,9 @@ export default function Settings({ server, onSaved }) {
           <label>Stop after idle (minutes, 0 = never)</label>
           <input type="number" min="0" value={core.idle_timeout_minutes} onChange={setCoreField('idle_timeout_minutes')} />
         </div>
-        <div className="small muted">
-          Container <code>{server.container}</code> and its data volume are named after the slug and
-          stay fixed; create a new server to change those.
+        <div className="hint">
+          Container <code>{server.container}</code> and its data volume are named after the short
+          name and stay fixed; create a new server to change those.
         </div>
       </div>
 

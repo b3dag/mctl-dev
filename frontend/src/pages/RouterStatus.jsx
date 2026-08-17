@@ -30,7 +30,7 @@ export default function RouterStatus() {
   return (
     <div className="stack">
       <div className="row between">
-        <h2 style={{ margin: 0, fontSize: 20 }}>mc-router</h2>
+        <h2>mc-router</h2>
         <Link to="/"><button className="ghost">Back</button></Link>
       </div>
 

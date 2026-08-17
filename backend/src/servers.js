@@ -68,12 +68,23 @@ async function createContainer(server) {
   await ensureVolume(server.volume_name, { 'mctl.serverId': server.id });
   await ensureImage(config.mcImage);
 
+  // By default nothing is published — players arrive through mc-router. A
+  // server with host_port set is additionally reachable at that port directly,
+  // which is the escape hatch for setups without wildcard DNS.
+  const publish = server.host_port
+    ? {
+        ExposedPorts: { '25565/tcp': {} },
+        PortBindings: { '25565/tcp': [{ HostPort: String(server.host_port) }] },
+      }
+    : {};
+
   return docker.createContainer({
     name: server.container_name,
     Image: config.mcImage,
     Env: buildEnv(server),
     Tty: false,
     OpenStdin: false,
+    ExposedPorts: publish.ExposedPorts,
     Labels: {
       'mctl.managed': 'true',
       'mctl.serverId': server.id,
@@ -84,14 +95,33 @@ async function createContainer(server) {
       RestartPolicy: { Name: 'no' }, // lifecycle is ours, not Docker's
       NetworkMode: config.network,
       Memory: Math.round(parseMemory(server.memory) * 1.4), // heap + JVM overhead
+      PortBindings: publish.PortBindings,
     },
     NetworkingConfig: {
       EndpointsConfig: {
         [config.network]: { Aliases: [server.container_name, server.slug] },
       },
     },
-    // No PortBindings on purpose: nothing is reachable from the host.
   });
+}
+
+/**
+ * RCON is never published, so only the game port is ever exposed. Validate
+ * against the router's own port and against the other servers rather than
+ * letting Docker fail at start time with a bind error.
+ */
+export function validateHostPort(input, selfId = null) {
+  if (input === null || input === undefined || input === '') return null;
+  const port = Math.trunc(Number(input));
+  if (!Number.isFinite(port) || port < 1024 || port > 65535)
+    throw httpError(400, 'port must be between 1024 and 65535');
+  if (port === config.publicMcPort)
+    throw httpError(400, `port ${port} is already used by mc-router itself`);
+  const clash = db
+    .prepare('SELECT name FROM servers WHERE host_port = ? AND id IS NOT ?')
+    .get(port, selfId);
+  if (clash) throw httpError(409, `port ${port} is already used by "${clash.name}"`);
+  return port;
 }
 
 function parseMemory(mem) {
@@ -120,6 +150,7 @@ export async function createServer(input, actor) {
     hostname: `${slug}.${config.domain}`.toLowerCase(),
     container_name: `mc-${slug}`,
     volume_name: `mctl-${slug}-data`,
+    host_port: validateHostPort(input.host_port),
     type,
     version: String(input.version || 'LATEST'),
     memory: String(input.memory || config.defaultMemory),
@@ -138,10 +169,10 @@ export async function createServer(input, actor) {
     throw httpError(409, `container ${server.container_name} already exists`);
 
   db.prepare(
-    `INSERT INTO servers (id,name,slug,hostname,container_name,volume_name,type,version,memory,seed,
-       rcon_password,env,autostart_on_join,idle_timeout_minutes,created_at,created_by)
-     VALUES (@id,@name,@slug,@hostname,@container_name,@volume_name,@type,@version,@memory,@seed,
-       @rcon_password,@env,@autostart_on_join,@idle_timeout_minutes,@created_at,@created_by)`
+    `INSERT INTO servers (id,name,slug,hostname,container_name,volume_name,host_port,type,version,
+       memory,seed,rcon_password,env,autostart_on_join,idle_timeout_minutes,created_at,created_by)
+     VALUES (@id,@name,@slug,@hostname,@container_name,@volume_name,@host_port,@type,@version,
+       @memory,@seed,@rcon_password,@env,@autostart_on_join,@idle_timeout_minutes,@created_at,@created_by)`
   ).run(server);
 
   const full = getServer(id);
@@ -291,13 +322,21 @@ export async function updateServer(id, patch, actor) {
     if (clash) throw httpError(409, `${fields.hostname} is already used by "${clash.name}"`);
   }
 
+  if (patch.host_port !== undefined) {
+    fields.host_port = validateHostPort(patch.host_port, id);
+  }
+
   if (Object.keys(fields).length) {
     const sets = Object.keys(fields).map((k) => `${k} = @${k}`).join(', ');
     db.prepare(`UPDATE servers SET ${sets} WHERE id = @id`).run({ ...fields, id });
     audit(actor, id, 'server.update', Object.keys(fields).join(','));
   }
 
-  const needsRecreate = ['type', 'version', 'memory', 'seed', 'env'].some((k) => k in fields);
+  // Port bindings are fixed at container creation, so changing one means
+  // rebuilding the container against the same volume.
+  const needsRecreate = ['type', 'version', 'memory', 'seed', 'env', 'host_port'].some(
+    (k) => k in fields
+  );
   const updated = getServer(id);
   if (needsRecreate && patch.apply !== false) await recreateServer(id, actor);
   else await syncRoutes(allStates());

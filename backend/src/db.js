@@ -63,8 +63,14 @@ CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_log(at DESC);
 // Additive only, guarded so an existing database upgrades in place on boot.
 const columns = (table) => db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
 
-if (!columns('servers').includes('hostname_override')) {
+const serverColumns = columns('servers');
+if (!serverColumns.includes('hostname_override')) {
   db.exec('ALTER TABLE servers ADD COLUMN hostname_override TEXT');
+}
+// Optional direct publish: bypasses mc-router so players can connect with a
+// plain host:port, for people who'd rather not run wildcard DNS.
+if (!serverColumns.includes('host_port')) {
+  db.exec('ALTER TABLE servers ADD COLUMN host_port INTEGER');
 }
 
 export function audit(actor, serverId, action, detail) {

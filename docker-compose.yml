@@ -53,6 +53,10 @@ services:
       DEV_USER: ${DEV_USER:-}
       # Infrastructure wiring
       DOMAIN: ${DOMAIN:-mc.localhost}
+      # Where players reach directly published servers, and which host port
+      # mc-router already occupies.
+      PUBLIC_HOST: ${PUBLIC_HOST:-${DOMAIN:-mc.localhost}}
+      PUBLIC_MC_PORT: ${MC_PORT:-25565}
       MC_NETWORK: ${COMPOSE_PROJECT_NAME:-mctl}-net
       ROUTER_API: http://mc-router:8080
       ROUTES_FILE: /routes/routes.json

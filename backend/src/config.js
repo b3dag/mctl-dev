@@ -9,6 +9,13 @@ export const config = {
   domain: process.env.DOMAIN || 'localhost',
   network: process.env.MC_NETWORK || 'mctl-net',
 
+  // The host port mc-router itself is published on. Servers may not claim it,
+  // and the ports view shows it alongside any directly published servers.
+  publicMcPort: Number(process.env.PUBLIC_MC_PORT || 25565),
+  // Hostname or IP players use for directly published servers. Falls back to
+  // the domain, which is right for a single-host setup.
+  publicHost: process.env.PUBLIC_HOST || process.env.DOMAIN || 'localhost',
+
   routerApi: process.env.ROUTER_API || 'http://mc-router:8080',
   routesFile: process.env.ROUTES_FILE || '/routes/routes.json',
   wakerTarget: process.env.WAKER_TARGET || 'mctl-manager:25566',

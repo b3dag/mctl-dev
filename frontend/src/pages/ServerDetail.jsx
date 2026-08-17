@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Link, NavLink, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
+import { NavLink, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api.js';
-import { useEvents } from '../useEvents.js';
-import { Confirm, StatusPill, useAsync } from '../ui.jsx';
+import { Confirm, StatusDot, PHASE_LABEL, useAsync, useToast } from '../ui.jsx';
 import Console from '../tabs/Console.jsx';
 import Players from '../tabs/Players.jsx';
 import Files from '../tabs/Files.jsx';
@@ -21,57 +20,68 @@ const TABS = [
   ['settings', 'Settings'],
 ];
 
-export default function ServerDetail() {
+export default function ServerDetail({ states = {}, onChange }) {
   const { id } = useParams();
   const nav = useNavigate();
+  const toast = useToast();
   const [server, setServer] = useState(null);
+  const [me, setMe] = useState(null);
   const [error, setError] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const { run } = useAsync();
+  const { busy, run } = useAsync();
 
   const load = useCallback(() => {
-    api
-      .getServer(id)
-      .then((d) => setServer(d.server))
-      .catch((e) => setError(e.message));
+    api.getServer(id).then((d) => setServer(d.server)).catch((e) => setError(e.message));
   }, [id]);
 
-  useEffect(load, [load]);
-  const { states } = useEvents();
-  const state = states[id] || server?.state || {};
+  useEffect(() => {
+    load();
+    api.me().then(setMe).catch(() => {});
+  }, [load]);
 
-  if (error) return <div className="card badge-error">{error}</div>;
+  if (error) return <div className="card err-text">{error}</div>;
   if (!server) return <div className="empty">Loading…</div>;
 
-  const act = (fn, msg) => run(async () => {
-    await fn(id);
-    load();
-  }, msg);
+  const state = states[id] || server.state || {};
+  const act = (fn, msg) => run(async () => { await fn(id); load(); onChange?.(); }, msg);
+  const address = server.hostPort ? `${me?.publicHost || ''}:${server.hostPort}` : server.hostname;
 
   return (
     <div className="stack">
       <div className="row between wrap">
-        <div className="row grow" style={{ minWidth: 0 }}>
-          <Link to="/" className="muted">←</Link>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 19, fontWeight: 600 }}>{server.name}</div>
-            <div className="small muted mono" style={{ wordBreak: 'break-all' }}>{server.hostname}</div>
+        <div style={{ minWidth: 0 }}>
+          <h2>{server.name}</h2>
+          <div className="row small muted" style={{ gap: 6, marginTop: 2 }}>
+            <StatusDot state={state} />
+            <span>{PHASE_LABEL[state.phase] || '—'}</span>
+            {state.phase === 'ready' && <span>· {state.online ?? 0}{state.max ? `/${state.max}` : ''} online</span>}
+            <span>· {server.type} {server.version}</span>
           </div>
         </div>
-        <StatusPill state={state} />
+        <div className="row wrap" style={{ gap: 6 }}>
+          {state.running ? (
+            <>
+              <button className="sm" disabled={busy} onClick={() => act(api.stop, 'Stopping…')}>Stop</button>
+              <button className="sm" disabled={busy} onClick={() => act(api.restart, 'Restarting…')}>Restart</button>
+            </>
+          ) : (
+            <button className="sm primary" disabled={busy} onClick={() => act(api.start, 'Starting…')}>Start</button>
+          )}
+          <button className="sm danger" onClick={() => setConfirmDelete(true)}>Delete</button>
+        </div>
       </div>
 
-      <div className="row wrap" style={{ gap: 8 }}>
-        {state.running ? (
-          <>
-            <button onClick={() => act(api.stop, 'Stopping…')}>Stop</button>
-            <button onClick={() => act(api.restart, 'Restarting…')}>Restart</button>
-          </>
-        ) : (
-          <button className="primary" onClick={() => act(api.start, 'Starting…')}>Start</button>
-        )}
-        <div className="grow" />
-        <button className="danger" onClick={() => setConfirmDelete(true)}>Delete</button>
+      <div className="card row between wrap" style={{ gap: 8 }}>
+        <div style={{ minWidth: 0 }}>
+          <div className="muted small">Players connect to</div>
+          <div className="mono" style={{ wordBreak: 'break-all' }}>{address}</div>
+        </div>
+        <button
+          className="sm"
+          onClick={() => { navigator.clipboard?.writeText(address); toast('Address copied'); }}
+        >
+          Copy
+        </button>
       </div>
 
       <nav className="tabs">
@@ -90,18 +100,22 @@ export default function ServerDetail() {
         <Route path="mods" element={<Mods server={server} />} />
         <Route path="backups" element={<Backups server={server} />} />
         <Route path="stats" element={<Stats server={server} state={state} />} />
-        <Route path="settings" element={<Settings server={server} onSaved={load} />} />
+        <Route
+          path="settings"
+          element={<Settings server={server} me={me} onSaved={() => { load(); onChange?.(); }} />}
+        />
       </Routes>
 
       {confirmDelete && (
         <Confirm
           title={`Delete ${server.name}?`}
-          message="This removes the container, its data volume (world, configs, mods) and its mc-router mapping. Backups already taken are kept."
+          message="This removes the container, its data volume (world, configs, mods) and its route. Backups already taken are kept."
           confirmWord={server.slug}
           onClose={() => setConfirmDelete(false)}
           onConfirm={() =>
             run(async () => {
               await api.deleteServer(id, server.slug, false);
+              onChange?.();
               nav('/');
             }, 'Server deleted')
           }

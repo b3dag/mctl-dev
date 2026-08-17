@@ -6,7 +6,7 @@ import { useAsync } from '../ui.jsx';
 const slugify = (s) =>
   s.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
 
-export default function CreateServer() {
+export default function CreateServer({ onCreated }) {
   const nav = useNavigate();
   const { busy, run } = useAsync();
   const [meta, setMeta] = useState(null);
@@ -14,6 +14,7 @@ export default function CreateServer() {
   const [form, setForm] = useState({
     name: '',
     slug: '',
+    hostPort: '',
     type: 'PAPER',
     version: 'LATEST',
     memory: '2G',
@@ -45,6 +46,7 @@ export default function CreateServer() {
       const { server } = await api.createServer({
         name: form.name,
         slug,
+        host_port: form.hostPort === '' ? null : Number(form.hostPort),
         type: form.type,
         version: form.version,
         memory: form.memory,
@@ -60,6 +62,7 @@ export default function CreateServer() {
           MEMORY: form.memory,
         },
       });
+      onCreated?.();
       nav(`/servers/${server.id}`);
     }, 'Server created');
   };
@@ -67,7 +70,7 @@ export default function CreateServer() {
   return (
     <form className="stack" onSubmit={submit}>
       <div className="row between">
-        <h2 style={{ margin: 0, fontSize: 20 }}>New server</h2>
+        <h2>New server</h2>
         <Link to="/"><button type="button" className="ghost">Cancel</button></Link>
       </div>
 
@@ -80,12 +83,29 @@ export default function CreateServer() {
         <div className="field">
           <label>Hostname</label>
           <input value={form.slug} onChange={set('slug')} placeholder={slugify(form.name) || 'survival'} />
-          <div className="small muted mono" style={{ marginTop: 6 }}>
-            {slug || 'name'}.{me?.domain || 'your-domain'}
+          <div className="hint mono">{slug || 'name'}.{me?.domain || 'your-domain'}</div>
+          <div className="hint">
+            With a wildcard DNS record pointed at this host, players join with that address and no
+            port number.
           </div>
-          <div className="small muted" style={{ marginTop: 4 }}>
-            Point a wildcard DNS record at the host running mc-router, and players join with this
-            address — no port number needed.
+        </div>
+
+        <div className="field">
+          <label>Direct port (optional)</label>
+          <input
+            className="mono"
+            type="number"
+            min="1024"
+            max="65535"
+            style={{ maxWidth: 160 }}
+            value={form.hostPort}
+            onChange={set('hostPort')}
+            placeholder="none"
+          />
+          <div className="hint">
+            {form.hostPort
+              ? <>Also reachable at <code className="mono">{me?.publicHost || 'your-host'}:{form.hostPort}</code>, no DNS needed.</>
+              : <>Leave empty to use the hostname above. Set a port to publish this server directly as well — the simplest option if you don't want to configure DNS.</>}
           </div>
         </div>
 
