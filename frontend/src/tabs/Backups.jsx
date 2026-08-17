@@ -35,19 +35,34 @@ export default function Backups({ server }) {
 
   return (
     <div className="stack">
-      {data.repo && !data.repo.error && (
+      {data.repo?.server && (
         <div className="card">
-          <div className="card-head"><h3>Repository</h3></div>
+          <div className="card-head"><h3>Snapshots of this server</h3></div>
+          <dl className="kv">
+            <dt>Count</dt>
+            <dd>{data.repo.server.snapshots}</dd>
+            <dt>Restored size</dt>
+            <dd className="mono">{bytes(data.repo.server.logical)}</dd>
+          </dl>
+          {data.repo.server.snapshots !== data.backups.filter((b) => b.engine === 'restic').length && (
+            <div className="hint err-text">
+              The repository holds {data.repo.server.snapshots} snapshot(s) for this server but
+              mctl has {data.backups.filter((b) => b.engine === 'restic').length} row(s). Snapshots
+              taken outside mctl are not listed below.
+            </div>
+          )}
+
+          <div className="card-head" style={{ marginTop: 14 }}><h3>Repository</h3></div>
           <dl className="kv">
             <dt>Snapshots</dt>
-            <dd>{data.repo.snapshots}</dd>
+            <dd>{data.repo.repo.snapshots} <span className="muted">across every server</span></dd>
             <dt>Stored on disk</dt>
-            <dd className="mono">{bytes(data.repo.onDisk)}</dd>
+            <dd className="mono">{bytes(data.repo.repo.onDisk)}</dd>
             <dt>Restored size</dt>
             <dd className="mono">
-              {bytes(data.repo.logical)}
-              {data.repo.saved > 0 && (
-                <span className="muted"> ({bytes(data.repo.saved)} saved by deduplication)</span>
+              {bytes(data.repo.repo.logical)}
+              {data.repo.repo.saved > 0 && (
+                <span className="muted"> ({bytes(data.repo.repo.saved)} saved by deduplication)</span>
               )}
             </dd>
           </dl>
@@ -62,6 +77,7 @@ export default function Backups({ server }) {
           </div>
         </div>
       )}
+
       {data.repo?.error && <div className="card err-text">Repository: {data.repo.error}</div>}
 
       <div className="card stack">

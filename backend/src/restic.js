@@ -161,34 +161,59 @@ export async function forgetSnapshot(snapshotId) {
   await restic(['forget', '--prune', snapshotId]);
 }
 
-/** Repository totals, which is where the deduplication shows up. */
-export async function repoStats() {
+/**
+ * One repository holds every server's snapshots, and deduplication happens
+ * across all of them, so on-disk size can only be reported repo-wide. Counts
+ * and restored size are reported per server as well, because repo-wide figures
+ * on a single server's page just look wrong.
+ */
+export async function repoStats(server) {
   await initRepo();
+  const parse = (res) => {
+    try {
+      return JSON.parse(res.stdout);
+    } catch {
+      return {};
+    }
+  };
+
   const [raw, restoreSize, list] = await Promise.all([
     restic(['stats', '--json', '--mode', 'raw-data']),
     restic(['stats', '--json', '--mode', 'restore-size']),
     restic(['snapshots', '--json']),
   ]);
-  const parse = (s) => {
-    try {
-      return JSON.parse(s.stdout);
-    } catch {
-      return {};
-    }
-  };
+
+  let all = [];
+  try {
+    all = JSON.parse(list.stdout || '[]');
+  } catch {
+    /* empty repo */
+  }
+
+  const tagsOf = (s) =>
+    Object.fromEntries((s.tags || []).filter((t) => t.includes('=')).map((t) => t.split('=', 2)));
+  const mine = server ? all.filter((s) => tagsOf(s).server === server.slug) : [];
+
+  // Only worth another restic call if this server actually has snapshots.
+  let mineLogical = 0;
+  if (mine.length) {
+    const scoped = await restic([
+      'stats', '--json', '--mode', 'restore-size', '--tag', `server=${server.slug}`,
+    ]);
+    mineLogical = parse(scoped).total_size ?? 0;
+  }
+
   const onDisk = parse(raw).total_size ?? null;
   const logical = parse(restoreSize).total_size ?? null;
-  let count = 0;
-  try {
-    count = JSON.parse(list.stdout || '[]').length;
-  } catch {
-    /* ignore */
-  }
+
   return {
-    onDisk,
-    logical,
-    snapshots: count,
-    saved: onDisk !== null && logical !== null ? Math.max(0, logical - onDisk) : null,
+    server: server ? { snapshots: mine.length, logical: mineLogical } : null,
+    repo: {
+      snapshots: all.length,
+      onDisk,
+      logical,
+      saved: onDisk !== null && logical !== null ? Math.max(0, logical - onDisk) : null,
+    },
   };
 }
 

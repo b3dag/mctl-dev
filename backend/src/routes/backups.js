@@ -14,7 +14,7 @@ router.get('/:id/backups', async (req, res, next) => {
       backups: backups.listBackups(req.server.id),
       schedule: backups.getSchedule(req.server.id),
       worldDir: backups.worldDirOf(req.server),
-      repo: await backups.repoStats().catch((e) => ({ error: e.message })),
+      repo: await backups.repoStats(req.server).catch((e) => ({ error: e.message })),
     });
   } catch (e) {
     next(e);

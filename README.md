@@ -210,11 +210,16 @@ backups already taken are kept.
 **Memory.** A server's container limit is set to its heap times 1.4 to leave room
 for JVM overhead.
 
-**Backup storage.** The restic repository lives in the `backups` volume, and its
-password sits beside it as `restic-password` rather than only in the database, so
-that volume alone is enough to recover. Copy both somewhere off the host if the
-backups matter. Snapshots taken before this change are still `.tar.gz` files and
-remain listed, downloadable and restorable through the old path.
+**Backup storage.** One restic repository holds every server's snapshots, which is
+what makes deduplication work across them, so on-disk size is a repository-wide
+figure rather than a per-server one. The Backups tab reports both: this server's
+own snapshot count and restored size, and the shared repository's totals.
+
+The repository lives in the `backups` volume, and its password sits beside it as
+`restic-password` rather than only in the database, so that volume alone is enough
+to recover. Copy both somewhere off the host if the backups matter. Snapshots
+taken before this change are still `.tar.gz` files and remain listed, downloadable
+and restorable through the old path.
 
 **Resource limits.** Each server gets a memory ceiling derived from its heap.
 Container logs are capped and rotated, because Docker's default keeps every line

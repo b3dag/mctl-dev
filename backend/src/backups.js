@@ -163,7 +163,7 @@ export const downloadName = (b, ext) => {
   return `${server?.slug || 'server'}-${scopeOf(b)}-${stamp}.${ext}`;
 };
 
-export const repoStats = () => restic.repoStats();
+export const repoStats = (server) => restic.repoStats(server);
 export const checkRepo = () => restic.check();
 
 // --- retention + scheduling -------------------------------------------------
