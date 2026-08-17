@@ -127,8 +127,35 @@ router.post('/router/sync', async (_req, res, next) => {
   }
 });
 
+/**
+ * The audit trail, joined to server names so a deleted server's history is
+ * still readable rather than a bare id.
+ */
 router.get('/audit', (req, res) => {
-  res.json({
-    entries: db.prepare('SELECT * FROM audit_log ORDER BY id DESC LIMIT ?').all(Number(req.query.limit) || 100),
-  });
+  const limit = Math.min(Math.max(Number(req.query.limit) || 200, 1), 1000);
+  const filters = [];
+  const params = {};
+  if (req.query.actor) {
+    filters.push('a.actor = @actor');
+    params.actor = String(req.query.actor);
+  }
+  if (req.query.q) {
+    filters.push('(a.action LIKE @q OR a.detail LIKE @q OR s.name LIKE @q)');
+    params.q = `%${String(req.query.q)}%`;
+  }
+  const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+
+  const entries = db
+    .prepare(
+      `SELECT a.id, a.at, a.actor, a.action, a.detail, a.server_id, s.name AS server_name, s.slug AS server_slug
+       FROM audit_log a LEFT JOIN servers s ON s.id = a.server_id
+       ${where} ORDER BY a.id DESC LIMIT @limit`
+    )
+    .all({ ...params, limit });
+
+  const actors = db
+    .prepare('SELECT actor, COUNT(*) AS n FROM audit_log WHERE actor IS NOT NULL GROUP BY actor ORDER BY n DESC')
+    .all();
+
+  res.json({ entries, actors, total: db.prepare('SELECT COUNT(*) AS n FROM audit_log').get().n });
 });

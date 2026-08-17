@@ -22,7 +22,13 @@ export const config = {
 
   mcImage: process.env.MC_IMAGE || 'itzg/minecraft-server:latest',
   helperImage: process.env.HELPER_IMAGE || 'alpine:3.20',
+  resticImage: process.env.RESTIC_IMAGE || 'restic/restic:latest',
   defaultMemory: process.env.DEFAULT_MEMORY || '2G',
+
+  // Docker's json-file driver keeps every line forever by default, which
+  // quietly fills the host disk on a long-running server.
+  logMaxSize: process.env.CONTAINER_LOG_MAX_SIZE || '10m',
+  logMaxFile: process.env.CONTAINER_LOG_MAX_FILE || '3',
 
   dataDir: process.env.DATA_DIR || path.resolve('data'),
   backupDir: process.env.BACKUP_DIR || path.resolve('backups'),

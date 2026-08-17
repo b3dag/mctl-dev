@@ -10,6 +10,7 @@ import CreateServer from './pages/CreateServer.jsx';
 import ServerDetail from './pages/ServerDetail.jsx';
 import RouterStatus from './pages/RouterStatus.jsx';
 import GeneralSettings from './pages/GeneralSettings.jsx';
+import Audit from './pages/Audit.jsx';
 
 export default function App() {
   const [me, setMe] = useState(null);
@@ -70,6 +71,7 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Overview servers={servers} states={states} me={me} onChange={loadServers} />} />
               <Route path="/ports" element={<Ports />} />
+              <Route path="/activity" element={<Audit />} />
               <Route path="/router" element={<RouterStatus />} />
               <Route path="/settings" element={<GeneralSettings onChange={() => { loadServers(); api.me().then(setMe).catch(() => {}); }} />} />
               <Route path="/new" element={<CreateServer onCreated={loadServers} />} />

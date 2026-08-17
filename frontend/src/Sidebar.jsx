@@ -6,6 +6,7 @@ const SYSTEM = [
   ['/', 'Overview', true],
   ['/ports', 'Ports'],
   ['/router', 'Router'],
+  ['/activity', 'Activity'],
   ['/settings', 'Settings'],
 ];
 

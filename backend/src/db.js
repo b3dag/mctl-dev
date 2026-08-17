@@ -72,6 +72,10 @@ if (!serverColumns.includes('hostname_override')) {
 if (!serverColumns.includes('host_port')) {
   db.exec('ALTER TABLE servers ADD COLUMN host_port INTEGER');
 }
+// CPU ceiling in cores, so one busy server cannot starve the rest.
+if (!serverColumns.includes('cpu_limit')) {
+  db.exec('ALTER TABLE servers ADD COLUMN cpu_limit REAL');
+}
 
 export function audit(actor, serverId, action, detail) {
   db.prepare(

@@ -5,7 +5,7 @@ import { useAsync } from '../ui.jsx';
 export default function GeneralSettings({ onChange }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
-  const [form, setForm] = useState({ domain: '', publicHost: '' });
+  const [form, setForm] = useState({ domain: '', publicHost: '', stopWarningSeconds: '30' });
   const [result, setResult] = useState(null);
   const { busy, run } = useAsync();
 
@@ -14,7 +14,11 @@ export default function GeneralSettings({ onChange }) {
       .settings()
       .then((d) => {
         setData(d);
-        setForm({ domain: d.settings.domain, publicHost: d.settings.publicHost });
+        setForm({
+          domain: d.settings.domain,
+          publicHost: d.settings.publicHost,
+          stopWarningSeconds: String(d.settings.stopWarningSeconds),
+        });
       })
       .catch((e) => setError(e.message));
   }, []);
@@ -25,11 +29,17 @@ export default function GeneralSettings({ onChange }) {
   if (!data) return <div className="empty">Loading</div>;
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
-  const dirty = form.domain !== data.settings.domain || form.publicHost !== data.settings.publicHost;
+  const dirty =
+    form.domain !== data.settings.domain ||
+    form.publicHost !== data.settings.publicHost ||
+    Number(form.stopWarningSeconds) !== data.settings.stopWarningSeconds;
 
   const save = () =>
     run(async () => {
-      const res = await api.saveSettings(form);
+      const res = await api.saveSettings({
+        ...form,
+        stopWarningSeconds: Number(form.stopWarningSeconds),
+      });
       setResult(res);
       load();
       onChange?.();
@@ -61,9 +71,30 @@ export default function GeneralSettings({ onChange }) {
           </div>
         </div>
 
+        <div className="field">
+          <label>Warn players before stopping, in seconds</label>
+          <input
+            className="mono"
+            type="number"
+            min="0"
+            max="120"
+            style={{ maxWidth: 160 }}
+            value={form.stopWarningSeconds}
+            onChange={set('stopWarningSeconds')}
+          />
+          <div className="hint">
+            A stop or restart broadcasts a countdown over RCON first. Skipped when nobody is
+            online, so an idle shutdown is still immediate. 0 turns it off.
+          </div>
+        </div>
+
         <div className="row" style={{ gap: 8 }}>
           <button className="primary" disabled={busy || !dirty} onClick={save}>Save</button>
-          {dirty && <button disabled={busy} onClick={() => setForm({ domain: data.settings.domain, publicHost: data.settings.publicHost })}>Reset</button>}
+          {dirty && <button disabled={busy} onClick={() => setForm({
+            domain: data.settings.domain,
+            publicHost: data.settings.publicHost,
+            stopWarningSeconds: String(data.settings.stopWarningSeconds),
+          })}>Reset</button>}
         </div>
 
         {result?.rehosted?.length > 0 && (

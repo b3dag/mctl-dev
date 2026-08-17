@@ -14,6 +14,7 @@ import {
   refreshAll,
   stateOf,
   allStates,
+  hostCpus,
   httpError,
 } from '../servers.js';
 import { rconCommand, playerList } from '../rcon.js';
@@ -37,6 +38,7 @@ const shape = (s) => ({
   hostname: s.hostname,
   hostnameOverride: s.hostname_override || '',
   hostPort: s.host_port || null,
+  cpuLimit: s.cpu_limit || null,
   routerAddress: routerAddress(s),
   directAddress: directAddress(s),
   container: s.container_name,
@@ -52,8 +54,8 @@ const shape = (s) => ({
   state: stateOf(s.id),
 });
 
-router.get('/meta', (_req, res) => {
-  res.json({ types: SERVER_TYPES, envCatalog: ENV_CATALOG });
+router.get('/meta', async (_req, res) => {
+  res.json({ types: SERVER_TYPES, envCatalog: ENV_CATALOG, hostCpus: await hostCpus() });
 });
 
 router.get('/', (_req, res) => {

@@ -12,8 +12,8 @@ import {
   inspectSafe,
 } from './docker.js';
 import { syncRoutes } from './router.js';
-import { getDomain } from './settings.js';
-import { dropRcon, isReady, playerList } from './rcon.js';
+import { getDomain, getStopWarningSeconds } from './settings.js';
+import { dropRcon, isReady, playerList, rconCommand } from './rcon.js';
 import { sanitizeEnv, RESERVED_ENV, SERVER_TYPES } from './envcatalog.js';
 
 export const events = new EventEmitter();
@@ -96,7 +96,15 @@ async function createContainer(server) {
       RestartPolicy: { Name: 'no' }, // lifecycle is ours, not Docker's
       NetworkMode: config.network,
       Memory: Math.round(parseMemory(server.memory) * 1.4), // heap + JVM overhead
+      // Without a CPU cap one server generating chunks can starve the others.
+      NanoCpus: server.cpu_limit ? Math.round(server.cpu_limit * 1e9) : 0,
       PortBindings: publish.PortBindings,
+      // Bounded logs: the console only ever shows the tail, and unbounded
+      // json-file logs are a slow disk leak.
+      LogConfig: {
+        Type: 'json-file',
+        Config: { 'max-size': config.logMaxSize, 'max-file': String(config.logMaxFile) },
+      },
     },
     NetworkingConfig: {
       EndpointsConfig: {
@@ -123,6 +131,29 @@ export function validateHostPort(input, selfId = null) {
     .get(port, selfId);
   if (clash) throw httpError(409, `port ${port} is already used by "${clash.name}"`);
   return port;
+}
+
+/** CPU ceiling in cores. Empty means unlimited. */
+export async function validateCpuLimit(input) {
+  if (input === null || input === undefined || input === '') return null;
+  const cores = Number(input);
+  if (!Number.isFinite(cores) || cores <= 0) throw httpError(400, 'CPU limit must be a positive number of cores');
+  if (cores < 0.1) throw httpError(400, 'CPU limit must be at least 0.1 cores');
+  const available = await hostCpus();
+  if (available && cores > available)
+    throw httpError(400, `this host only has ${available} CPU core${available === 1 ? '' : 's'}`);
+  return Math.round(cores * 100) / 100;
+}
+
+let cachedCpus = null;
+export async function hostCpus() {
+  if (cachedCpus !== null) return cachedCpus;
+  try {
+    cachedCpus = (await docker.info()).NCPU || null;
+  } catch {
+    cachedCpus = null;
+  }
+  return cachedCpus;
 }
 
 function parseMemory(mem) {
@@ -152,6 +183,7 @@ export async function createServer(input, actor) {
     container_name: `mc-${slug}`,
     volume_name: `mctl-${slug}-data`,
     host_port: validateHostPort(input.host_port),
+    cpu_limit: await validateCpuLimit(input.cpu_limit),
     type,
     version: String(input.version || 'LATEST'),
     memory: String(input.memory || config.defaultMemory),
@@ -170,10 +202,10 @@ export async function createServer(input, actor) {
     throw httpError(409, `container ${server.container_name} already exists`);
 
   db.prepare(
-    `INSERT INTO servers (id,name,slug,hostname,container_name,volume_name,host_port,type,version,
-       memory,seed,rcon_password,env,autostart_on_join,idle_timeout_minutes,created_at,created_by)
-     VALUES (@id,@name,@slug,@hostname,@container_name,@volume_name,@host_port,@type,@version,
-       @memory,@seed,@rcon_password,@env,@autostart_on_join,@idle_timeout_minutes,@created_at,@created_by)`
+    `INSERT INTO servers (id,name,slug,hostname,container_name,volume_name,host_port,cpu_limit,type,
+       version,memory,seed,rcon_password,env,autostart_on_join,idle_timeout_minutes,created_at,created_by)
+     VALUES (@id,@name,@slug,@hostname,@container_name,@volume_name,@host_port,@cpu_limit,@type,
+       @version,@memory,@seed,@rcon_password,@env,@autostart_on_join,@idle_timeout_minutes,@created_at,@created_by)`
   ).run(server);
 
   const full = getServer(id);
@@ -243,7 +275,35 @@ async function waitReady(server) {
   return false;
 }
 
-export async function stopServer(id, actor, { reason } = {}) {
+/**
+ * Broadcast a countdown before pulling a running server out from under people.
+ * Skipped entirely when nobody is online, which is also why the idle auto-stop
+ * never waits: by definition it only fires on an empty server.
+ */
+async function warnPlayers(server, verb) {
+  const window = Math.min(getStopWarningSeconds(), 120);
+  if (!window) return 0;
+
+  let online = 0;
+  try {
+    online = (await playerList(server)).online;
+  } catch {
+    return 0; // no RCON, nothing we can tell them
+  }
+  if (!online) return 0;
+
+  const marks = [60, 30, 15, 10, 5, 4, 3, 2, 1].filter((m) => m <= window);
+  let remaining = window;
+  for (const mark of marks) {
+    if (remaining > mark) await sleep((remaining - mark) * 1000);
+    remaining = mark;
+    await rconCommand(server, `say ${verb} in ${mark} second${mark === 1 ? '' : 's'}`).catch(() => {});
+  }
+  if (remaining > 0) await sleep(remaining * 1000);
+  return window;
+}
+
+export async function stopServer(id, actor, { reason, warn = true } = {}) {
   const server = getServer(id);
   if (!server) throw httpError(404, 'no such server');
   const st = await containerState(server.container_name);
@@ -255,6 +315,11 @@ export async function stopServer(id, actor, { reason } = {}) {
 
   setState(id, { phase: 'stopping' });
   audit(actor, id, 'server.stop', reason);
+
+  if (warn && stateOf(id).phase !== 'starting') {
+    const waited = await warnPlayers(server, reason === 'restart' ? 'Restarting' : 'Stopping');
+    if (waited) audit(actor, id, 'server.warned', `${waited}s countdown`);
+  }
   // Graceful: itzg's image traps SIGTERM and runs a clean `stop`.
   try {
     await docker.getContainer(server.container_name).stop({ t: 120 });
@@ -326,6 +391,9 @@ export async function updateServer(id, patch, actor) {
   if (patch.host_port !== undefined) {
     fields.host_port = validateHostPort(patch.host_port, id);
   }
+  if (patch.cpu_limit !== undefined) {
+    fields.cpu_limit = await validateCpuLimit(patch.cpu_limit);
+  }
 
   if (Object.keys(fields).length) {
     const sets = Object.keys(fields).map((k) => `${k} = @${k}`).join(', ');
@@ -335,7 +403,7 @@ export async function updateServer(id, patch, actor) {
 
   // Port bindings are fixed at container creation, so changing one means
   // rebuilding the container against the same volume.
-  const needsRecreate = ['type', 'version', 'memory', 'seed', 'env', 'host_port'].some(
+  const needsRecreate = ['type', 'version', 'memory', 'seed', 'env', 'host_port', 'cpu_limit'].some(
     (k) => k in fields
   );
   const updated = getServer(id);

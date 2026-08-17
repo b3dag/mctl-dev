@@ -104,6 +104,8 @@ Everything lives in `.env`:
 | `MC_IMAGE` | Minecraft image (default `itzg/minecraft-server:latest`) |
 | `HELPER_IMAGE` | Short-lived image used for volume operations |
 | `DEFAULT_MEMORY` | Default heap for new servers |
+| `CONTAINER_LOG_MAX_SIZE` | Per-file log cap on server containers (default 10m) |
+| `CONTAINER_LOG_MAX_FILE` | How many rotated log files to keep (default 3) |
 
 ### Changing the domain later
 
@@ -179,6 +181,9 @@ the snapshot is consistent. Schedule with cron, keep the last N, download as
 **Stats** - CPU and memory from Docker stats with a rolling history, plus disk
 usage of the data volume on demand.
 
+**Activity** - the audit trail: who started, stopped, edited, deleted or ran a command,
+filterable by person and searchable, with server names resolved even after a server is gone.
+
 **Settings** - a form over the environment variables the itzg image supports
 (difficulty, gamemode, MOTD, view distance, …) plus an escape hatch for any
 other variable. Applying recreates the container against the same volume, so
@@ -200,6 +205,15 @@ backups already taken are kept.
 
 **Memory.** A server's container limit is set to its heap times 1.4 to leave room
 for JVM overhead.
+
+**Resource limits.** Each server gets a memory ceiling derived from its heap, and
+optionally a CPU ceiling in cores so one server generating chunks cannot starve
+the rest. Container logs are capped and rotated, because Docker's default keeps
+every line forever and slowly fills the disk.
+
+**Stopping politely.** A stop or restart broadcasts a countdown over RCON before
+pulling the server down, configurable in Settings and skipped when nobody is
+online, so the idle auto-stop stays immediate.
 
 **Resource footprint.** Each running Minecraft server is a JVM; the manager
 itself is a small Node process. Wake-on-join plus idle auto-stop is what makes a

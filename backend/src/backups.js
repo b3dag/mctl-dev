@@ -91,7 +91,7 @@ export async function restoreBackup(id, { actor, restart = true } = {}) {
 
   const st = await containerState(server.container_name);
   const wasRunning = st.running;
-  if (wasRunning) await stopServer(server.id, actor, { reason: 'restore' });
+  if (wasRunning) await stopServer(server.id, actor, { reason: 'restore', warn: false });
 
   const scope = b.filename.includes('-all-') ? 'all' : 'world';
   if (scope === 'world') {
