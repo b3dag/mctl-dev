@@ -116,7 +116,7 @@ export default function Files({ server }) {
         />
       </div>
 
-      {error && <div className="card badge-error">{error}</div>}
+      {error && <div className="card err-text">{error}</div>}
 
       <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
         <table>

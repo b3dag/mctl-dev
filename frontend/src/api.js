@@ -67,6 +67,7 @@ export const api = {
   deleteBackup: (id, bid) => request('DELETE', `/api/servers/${id}/backups/${bid}`),
   restoreBackup: (id, bid, slug) =>
     request('POST', `/api/servers/${id}/backups/${bid}/restore${q({ confirm: slug })}`),
+  checkBackups: (id) => request('POST', `/api/servers/${id}/backups/check`),
   setBackupSchedule: (id, body) => request('PUT', `/api/servers/${id}/backups/schedule`, body),
   backupUrl: (id, bid, format) => `/api/servers/${id}/backups/${bid}/download${q({ format })}`,
 

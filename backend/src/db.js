@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS servers (
 CREATE TABLE IF NOT EXISTS backups (
   id         TEXT PRIMARY KEY,
   server_id  TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
-  filename   TEXT NOT NULL,
+  filename   TEXT,
   size       INTEGER NOT NULL DEFAULT 0,
   kind       TEXT NOT NULL DEFAULT 'manual',
   note       TEXT,
@@ -76,6 +76,14 @@ if (!serverColumns.includes('host_port')) {
 if (!serverColumns.includes('cpu_limit')) {
   db.exec('ALTER TABLE servers ADD COLUMN cpu_limit REAL');
 }
+
+// Backups moved from one tar.gz per snapshot to a deduplicated restic repo.
+// Old rows keep filename and are read back through the tar path.
+const backupColumns = columns('backups');
+if (!backupColumns.includes('engine')) db.exec('ALTER TABLE backups ADD COLUMN engine TEXT');
+if (!backupColumns.includes('snapshot_id')) db.exec('ALTER TABLE backups ADD COLUMN snapshot_id TEXT');
+if (!backupColumns.includes('scope')) db.exec('ALTER TABLE backups ADD COLUMN scope TEXT');
+if (!backupColumns.includes('logical_size')) db.exec('ALTER TABLE backups ADD COLUMN logical_size INTEGER');
 
 export function audit(actor, serverId, action, detail) {
   db.prepare(

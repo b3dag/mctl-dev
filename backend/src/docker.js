@@ -106,6 +106,101 @@ export async function runHelper(volumeName, script, { timeoutMs = 60000 } = {}) 
 }
 
 /**
+ * Run a one-shot container and capture stdout and stderr separately.
+ *
+ * runHelper uses a TTY, which is fine for shell output but merges the two
+ * streams. Anything whose stdout we parse as JSON has to demultiplex instead,
+ * so tool warnings on stderr cannot corrupt the payload.
+ */
+export async function runCapture({ image, cmd, binds, env, timeoutMs = 900000 }) {
+  await ensureImage(image);
+  const container = await docker.createContainer({
+    Image: image,
+    Cmd: cmd,
+    Env: env,
+    Tty: false,
+    Labels: { 'mctl.helper': 'true' },
+    HostConfig: { Binds: binds, AutoRemove: false, NetworkMode: 'none' },
+  });
+  try {
+    const raw = await container.attach({ stream: true, stdout: true, stderr: true });
+    const out = [];
+    const err = [];
+    const stdout = new PassThrough();
+    const stderr = new PassThrough();
+    stdout.on('data', (d) => out.push(d));
+    stderr.on('data', (d) => err.push(d));
+    docker.modem.demuxStream(raw, stdout, stderr);
+    raw.on('end', () => {
+      stdout.end();
+      stderr.end();
+    });
+
+    await container.start();
+    const timer = setTimeout(() => container.kill().catch(() => {}), timeoutMs);
+    const res = await container.wait();
+    clearTimeout(timer);
+    await new Promise((r) => setTimeout(r, 100)); // let the final chunks arrive
+
+    return {
+      code: res.StatusCode,
+      stdout: Buffer.concat(out).toString('utf8'),
+      stderr: Buffer.concat(err).toString('utf8'),
+    };
+  } finally {
+    await container.remove({ force: true }).catch(() => {});
+  }
+}
+
+/**
+ * Same, but hands stdout back as a stream for commands that emit an archive.
+ * The container is removed once it exits; a non-zero exit destroys the stream
+ * with the tool's stderr as the error, so a failure cannot look like truncation.
+ */
+export async function runStream({ image, cmd, binds, env, timeoutMs = 3600000 }) {
+  await ensureImage(image);
+  const container = await docker.createContainer({
+    Image: image,
+    Cmd: cmd,
+    Env: env,
+    Tty: false,
+    Labels: { 'mctl.helper': 'true' },
+    HostConfig: { Binds: binds, AutoRemove: false, NetworkMode: 'none' },
+  });
+
+  const raw = await container.attach({ stream: true, stdout: true, stderr: true });
+  const stdout = new PassThrough();
+  const stderr = new PassThrough();
+  const errChunks = [];
+  stderr.on('data', (d) => errChunks.push(d));
+  docker.modem.demuxStream(raw, stdout, stderr);
+  // demuxStream never ends its destinations, so without this the consumer waits
+  // forever on a stream that has already delivered everything.
+  raw.on('end', () => {
+    stdout.end();
+    stderr.end();
+  });
+  raw.on('error', (e) => stdout.destroy(e));
+
+  await container.start();
+  const timer = setTimeout(() => container.kill().catch(() => {}), timeoutMs);
+
+  container
+    .wait()
+    .then((res) => {
+      clearTimeout(timer);
+      if (res.StatusCode !== 0) {
+        const msg = Buffer.concat(errChunks).toString('utf8').trim();
+        stdout.destroy(new Error(msg || `helper exited ${res.StatusCode}`));
+      }
+    })
+    .catch((e) => stdout.destroy(e))
+    .finally(() => container.remove({ force: true }).catch(() => {}));
+
+  return stdout;
+}
+
+/**
  * Read a finished container's output. `follow: true` is deliberate even though
  * the container has already exited: it makes dockerode always hand back a
  * stream, whereas the non-following form returns a Buffer, a string or a

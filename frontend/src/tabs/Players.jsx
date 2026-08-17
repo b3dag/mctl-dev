@@ -40,7 +40,7 @@ export default function Players({ server, state }) {
 
   return (
     <div className="stack">
-      {error && <div className="card badge-error">{error}</div>}
+      {error && <div className="card err-text">{error}</div>}
 
       <div className="card">
         <div className="row between" style={{ marginBottom: 8 }}>

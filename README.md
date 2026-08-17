@@ -106,6 +106,7 @@ Everything lives in `.env`:
 | `DEFAULT_MEMORY` | Default heap for new servers |
 | `CONTAINER_LOG_MAX_SIZE` | Per-file log cap on server containers (default 10m) |
 | `CONTAINER_LOG_MAX_FILE` | How many rotated log files to keep (default 3) |
+| `RESTIC_IMAGE` | Image used to run backups (default `restic/restic:latest`) |
 
 ### Changing the domain later
 
@@ -173,10 +174,13 @@ jars, enable/disable (rename to `.disabled`), remove, upload, install from a
 direct HTTPS URL, or search Modrinth filtered to the server's loader and game
 version.
 
-**Backups** - snapshot the world (or all of `/data`) straight out of the
-container filesystem; running servers get `save-off` + `save-all flush` first so
-the snapshot is consistent. Schedule with cron, keep the last N, download as
-`.tar.gz` or `.zip`, restore with confirmation.
+**Backups** - snapshots go into a restic repository, which deduplicates at the
+chunk level: a second snapshot of a world that has not changed costs close to
+nothing, and the page shows on-disk size against the total restored size so you
+can see it. Running servers get `save-off` plus `save-all flush` first for a
+consistent copy. Schedule with cron, keep the last N, verify the repository's
+integrity, download any snapshot as `.tar.gz` or `.zip`, restore with
+confirmation.
 
 **Stats** - CPU and memory from Docker stats with a rolling history, plus disk
 usage of the data volume on demand.
@@ -205,6 +209,12 @@ backups already taken are kept.
 
 **Memory.** A server's container limit is set to its heap times 1.4 to leave room
 for JVM overhead.
+
+**Backup storage.** The restic repository lives in the `backups` volume, and its
+password sits beside it as `restic-password` rather than only in the database, so
+that volume alone is enough to recover. Copy both somewhere off the host if the
+backups matter. Snapshots taken before this change are still `.tar.gz` files and
+remain listed, downloadable and restorable through the old path.
 
 **Resource limits.** Each server gets a memory ceiling derived from its heap, and
 optionally a CPU ceiling in cores so one server generating chunks cannot starve

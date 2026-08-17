@@ -42,7 +42,7 @@ export default function Stats({ server, state }) {
     return () => clearInterval(t);
   }, [load]);
 
-  if (error) return <div className="card badge-error">{error}</div>;
+  if (error) return <div className="card err-text">{error}</div>;
   if (!data) return <div className="empty">Loading…</div>;
 
   const history = data.history || [];

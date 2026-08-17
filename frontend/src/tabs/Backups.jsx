@@ -30,11 +30,40 @@ export default function Backups({ server }) {
 
   useEffect(load, [load]);
 
-  if (error) return <div className="card badge-error">{error}</div>;
+  if (error) return <div className="card err-text">{error}</div>;
   if (!data) return <div className="empty">Loading…</div>;
 
   return (
     <div className="stack">
+      {data.repo && !data.repo.error && (
+        <div className="card">
+          <div className="card-head"><h3>Repository</h3></div>
+          <dl className="kv">
+            <dt>Snapshots</dt>
+            <dd>{data.repo.snapshots}</dd>
+            <dt>Stored on disk</dt>
+            <dd className="mono">{bytes(data.repo.onDisk)}</dd>
+            <dt>Restored size</dt>
+            <dd className="mono">
+              {bytes(data.repo.logical)}
+              {data.repo.saved > 0 && (
+                <span className="muted"> ({bytes(data.repo.saved)} saved by deduplication)</span>
+              )}
+            </dd>
+          </dl>
+          <div className="row" style={{ marginTop: 10 }}>
+            <button
+              className="sm"
+              disabled={busy}
+              onClick={() => run(async () => { const r = await api.checkBackups(server.id); alert(r.result); })}
+            >
+              Verify integrity
+            </button>
+          </div>
+        </div>
+      )}
+      {data.repo?.error && <div className="card err-text">Repository: {data.repo.error}</div>}
+
       <div className="card stack">
         <div className="row between wrap">
           <strong>Manual backup</strong>
@@ -96,8 +125,8 @@ export default function Backups({ server }) {
         <table>
           <thead>
             <tr>
-              <th>Backup</th>
-              <th style={{ width: 90 }}>Size</th>
+              <th>Snapshot</th>
+              <th style={{ width: 130 }}>Added</th>
               <th style={{ width: 110 }}>Created</th>
               <th style={{ width: 230 }}></th>
             </tr>
@@ -105,11 +134,18 @@ export default function Backups({ server }) {
           <tbody>
             {data.backups.map((b) => (
               <tr key={b.id}>
-                <td style={{ wordBreak: 'break-all' }}>
-                  <span className="small mono">{b.filename}</span>{' '}
+                <td>
+                  <span className="small mono">
+                    {b.engine === 'restic' ? String(b.snapshot_id).slice(0, 8) : b.filename}
+                  </span>{' '}
                   <span className="pill">{b.kind}</span>
+                  {b.engine === 'tar' && <span className="pill">legacy tar</span>}
+                  {b.scope === 'all' && <span className="pill">all of /data</span>}
                 </td>
-                <td className="muted small">{bytes(b.size)}</td>
+                <td className="muted small">
+                  {bytes(b.size)}
+                  {b.logical_size > 0 && <div>of {bytes(b.logical_size)}</div>}
+                </td>
                 <td className="muted small">{when(b.created_at)}</td>
                 <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                   <a className="btn sm" href={api.backupUrl(server.id, b.id, 'zip')} download>zip</a>{' '}
@@ -130,7 +166,7 @@ export default function Backups({ server }) {
         <Confirm
           title="Restore this backup?"
           message={`The server will be stopped, the current ${
-            restore.filename.includes('-all-') ? '/data contents' : `"${data.worldDir}" folder`
+            restore.scope === 'all' ? 'contents of /data' : `"${data.worldDir}" folder`
           } replaced with the snapshot, and the server started again if it was running. This cannot be undone.`}
           confirmWord={server.slug}
           onClose={() => setRestore(null)}
@@ -147,7 +183,7 @@ export default function Backups({ server }) {
       {remove && (
         <Confirm
           title="Delete this backup?"
-          message={remove.filename}
+          message={remove.engine === 'restic' ? `Snapshot ${String(remove.snapshot_id).slice(0, 8)}` : remove.filename}
           onClose={() => setRemove(null)}
           onConfirm={() =>
             run(async () => {

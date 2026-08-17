@@ -20,7 +20,7 @@ export default function RouterStatus() {
 
   useEffect(load, [load]);
 
-  if (error) return <div className="card badge-error">{error}</div>;
+  if (error) return <div className="card err-text">{error}</div>;
   if (!info) return <div className="empty">Loading…</div>;
 
   const live = info.live || {};
@@ -44,7 +44,7 @@ export default function RouterStatus() {
           </span>
           <span className="pill mono">{info.status.api}</span>
         </div>
-        {info.status.lastError && <div className="badge-error small">{info.status.lastError}</div>}
+        {info.status.lastError && <div className="err-text small">{info.status.lastError}</div>}
         <div className="small muted">
           Sleeping hostnames point at <code>{info.wakerTarget}</code>, which starts the container on a
           join attempt.
@@ -70,7 +70,7 @@ export default function RouterStatus() {
               <tr key={h}>
                 <td className="mono small">{h}</td>
                 <td className="mono small">{live[h] || <span className="muted">-</span>}</td>
-                <td className={`mono small ${live[h] !== expected[h] ? 'badge-error' : ''}`}>
+                <td className={`mono small ${live[h] !== expected[h] ? 'err-text' : ''}`}>
                   {expected[h] || <span className="muted">-</span>}
                 </td>
               </tr>

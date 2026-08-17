@@ -68,6 +68,9 @@ services:
       DEFAULT_MEMORY: ${DEFAULT_MEMORY:-2G}
       DATA_DIR: /app/data
       BACKUP_DIR: /backups
+      # Helper containers mount this volume by name to run restic.
+      BACKUP_VOLUME: ${COMPOSE_PROJECT_NAME:-mctl}_backups
+      RESTIC_IMAGE: ${RESTIC_IMAGE:-restic/restic:latest}
       # Optional integrations
       CF_API_KEY: ${CF_API_KEY:-}
     volumes:

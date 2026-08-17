@@ -8,12 +8,17 @@ export const router = Router({ mergeParams: true });
 
 router.use('/:id', loadServer);
 
-router.get('/:id/backups', (req, res) => {
-  res.json({
-    backups: backups.listBackups(req.server.id),
-    schedule: backups.getSchedule(req.server.id),
-    worldDir: backups.worldDirOf(req.server),
-  });
+router.get('/:id/backups', async (req, res, next) => {
+  try {
+    res.json({
+      backups: backups.listBackups(req.server.id),
+      schedule: backups.getSchedule(req.server.id),
+      worldDir: backups.worldDirOf(req.server),
+      repo: await backups.repoStats().catch((e) => ({ error: e.message })),
+    });
+  } catch (e) {
+    next(e);
+  }
 });
 
 router.post('/:id/backups', async (req, res, next) => {
@@ -25,6 +30,15 @@ router.post('/:id/backups', async (req, res, next) => {
       actor: req.user,
     });
     res.status(201).json({ backup: b });
+  } catch (e) {
+    next(e);
+  }
+});
+
+/** Ask restic to verify its own repository. */
+router.post('/:id/backups/check', async (_req, res, next) => {
+  try {
+    res.json({ result: await backups.checkRepo() });
   } catch (e) {
     next(e);
   }
@@ -57,19 +71,17 @@ function loadBackup(req, res, next) {
 
 router.get('/:id/backups/:backupId/download', loadBackup, async (req, res, next) => {
   try {
-    const p = backups.backupPath(req.backup);
-    if (!fs.existsSync(p)) throw httpError(410, 'backup file is missing from disk');
+    if (req.backup.engine === 'tar' && !fs.existsSync(backups.backupPath(req.backup)))
+      throw httpError(410, 'backup file is missing from disk');
 
-    if (req.query.format === 'zip') {
-      const name = req.backup.filename.replace(/\.tar\.gz$/, '.zip');
-      res.setHeader('content-type', 'application/zip');
-      res.setHeader('content-disposition', `attachment; filename="${name}"`);
-      await backups.streamAsZip(req.backup, res);
-      return;
-    }
-    res.setHeader('content-type', 'application/gzip');
-    res.setHeader('content-disposition', `attachment; filename="${req.backup.filename}"`);
-    fs.createReadStream(p).pipe(res);
+    const zip = req.query.format === 'zip';
+    res.setHeader('content-type', zip ? 'application/zip' : 'application/gzip');
+    res.setHeader(
+      'content-disposition',
+      `attachment; filename="${backups.downloadName(req.backup, zip ? 'zip' : 'tar.gz')}"`
+    );
+    if (zip) await backups.streamAsZip(req.backup, res);
+    else await backups.streamAsTarGz(req.backup, res);
   } catch (e) {
     next(e);
   }

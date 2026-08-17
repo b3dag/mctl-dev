@@ -32,6 +32,9 @@ export const config = {
 
   dataDir: process.env.DATA_DIR || path.resolve('data'),
   backupDir: process.env.BACKUP_DIR || path.resolve('backups'),
+  // Helper containers mount the backups volume by name, so they need the
+  // Docker volume rather than the path it appears at inside the manager.
+  backupVolume: process.env.BACKUP_VOLUME || 'mctl_backups',
   publicDir: process.env.PUBLIC_DIR || path.resolve('public'),
 
   requireCfAccess: bool(process.env.REQUIRE_CF_ACCESS, true),

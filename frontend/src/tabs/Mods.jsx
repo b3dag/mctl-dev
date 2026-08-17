@@ -20,7 +20,7 @@ export default function Mods({ server }) {
   if (error)
     return (
       <div className="card">
-        <div className="badge-error">{error}</div>
+        <div className="err-text">{error}</div>
         <p className="small muted">
           Vanilla servers have no mod or plugin folder. Switch the server type under Settings to
           Paper, Fabric, Forge or similar.
