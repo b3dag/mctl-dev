@@ -8,7 +8,6 @@ export default function Settings({ server, me, onSaved }) {
     name: server.name,
     hostname: server.hostnameOverride || '',
     host_port: server.hostPort ? String(server.hostPort) : '',
-    cpu_limit: server.cpuLimit ? String(server.cpuLimit) : '',
     type: server.type,
     version: server.version,
     memory: server.memory,
@@ -42,7 +41,6 @@ export default function Settings({ server, me, onSaved }) {
       await api.updateServer(server.id, {
         ...core,
         host_port: core.host_port === '' ? null : Number(core.host_port),
-        cpu_limit: core.cpu_limit === '' ? null : Number(core.cpu_limit),
         idle_timeout_minutes: Number(core.idle_timeout_minutes),
         env,
         apply,
@@ -99,25 +97,6 @@ export default function Settings({ server, me, onSaved }) {
             {' '}Changing this recreates the container.
           </div>
         </div>
-        <div className="field">
-          <label>CPU limit in cores (optional)</label>
-          <input
-            className="mono"
-            type="number"
-            step="0.5"
-            min="0.1"
-            style={{ maxWidth: 160 }}
-            value={core.cpu_limit}
-            onChange={setCoreField('cpu_limit')}
-            placeholder="unlimited"
-          />
-          <div className="hint">
-            {meta?.hostCpus ? `This host has ${meta.hostCpus} cores. ` : ''}
-            Caps how much CPU this server can take, so one busy world cannot starve the others.
-            Changing it recreates the container.
-          </div>
-        </div>
-
         <div className="row wrap" style={{ gap: 12 }}>
           <div className="field grow">
             <label>Type</label>

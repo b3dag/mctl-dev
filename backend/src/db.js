@@ -72,9 +72,13 @@ if (!serverColumns.includes('hostname_override')) {
 if (!serverColumns.includes('host_port')) {
   db.exec('ALTER TABLE servers ADD COLUMN host_port INTEGER');
 }
-// CPU ceiling in cores, so one busy server cannot starve the rest.
-if (!serverColumns.includes('cpu_limit')) {
-  db.exec('ALTER TABLE servers ADD COLUMN cpu_limit REAL');
+// cpu_limit existed briefly and was dropped again; clear it where it landed.
+if (serverColumns.includes('cpu_limit')) {
+  try {
+    db.exec('ALTER TABLE servers DROP COLUMN cpu_limit');
+  } catch {
+    /* older SQLite cannot drop columns; an unused column is harmless */
+  }
 }
 
 // Backups moved from one tar.gz per snapshot to a deduplicated restic repo.

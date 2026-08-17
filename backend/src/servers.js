@@ -96,8 +96,6 @@ async function createContainer(server) {
       RestartPolicy: { Name: 'no' }, // lifecycle is ours, not Docker's
       NetworkMode: config.network,
       Memory: Math.round(parseMemory(server.memory) * 1.4), // heap + JVM overhead
-      // Without a CPU cap one server generating chunks can starve the others.
-      NanoCpus: server.cpu_limit ? Math.round(server.cpu_limit * 1e9) : 0,
       PortBindings: publish.PortBindings,
       // Bounded logs: the console only ever shows the tail, and unbounded
       // json-file logs are a slow disk leak.
@@ -133,29 +131,6 @@ export function validateHostPort(input, selfId = null) {
   return port;
 }
 
-/** CPU ceiling in cores. Empty means unlimited. */
-export async function validateCpuLimit(input) {
-  if (input === null || input === undefined || input === '') return null;
-  const cores = Number(input);
-  if (!Number.isFinite(cores) || cores <= 0) throw httpError(400, 'CPU limit must be a positive number of cores');
-  if (cores < 0.1) throw httpError(400, 'CPU limit must be at least 0.1 cores');
-  const available = await hostCpus();
-  if (available && cores > available)
-    throw httpError(400, `this host only has ${available} CPU core${available === 1 ? '' : 's'}`);
-  return Math.round(cores * 100) / 100;
-}
-
-let cachedCpus = null;
-export async function hostCpus() {
-  if (cachedCpus !== null) return cachedCpus;
-  try {
-    cachedCpus = (await docker.info()).NCPU || null;
-  } catch {
-    cachedCpus = null;
-  }
-  return cachedCpus;
-}
-
 function parseMemory(mem) {
   const m = String(mem).match(/^(\d+)\s*([GMgm])?$/);
   if (!m) return 2 * 1024 ** 3;
@@ -183,7 +158,6 @@ export async function createServer(input, actor) {
     container_name: `mc-${slug}`,
     volume_name: `mctl-${slug}-data`,
     host_port: validateHostPort(input.host_port),
-    cpu_limit: await validateCpuLimit(input.cpu_limit),
     type,
     version: String(input.version || 'LATEST'),
     memory: String(input.memory || config.defaultMemory),
@@ -202,10 +176,10 @@ export async function createServer(input, actor) {
     throw httpError(409, `container ${server.container_name} already exists`);
 
   db.prepare(
-    `INSERT INTO servers (id,name,slug,hostname,container_name,volume_name,host_port,cpu_limit,type,
-       version,memory,seed,rcon_password,env,autostart_on_join,idle_timeout_minutes,created_at,created_by)
-     VALUES (@id,@name,@slug,@hostname,@container_name,@volume_name,@host_port,@cpu_limit,@type,
-       @version,@memory,@seed,@rcon_password,@env,@autostart_on_join,@idle_timeout_minutes,@created_at,@created_by)`
+    `INSERT INTO servers (id,name,slug,hostname,container_name,volume_name,host_port,type,version,
+       memory,seed,rcon_password,env,autostart_on_join,idle_timeout_minutes,created_at,created_by)
+     VALUES (@id,@name,@slug,@hostname,@container_name,@volume_name,@host_port,@type,@version,
+       @memory,@seed,@rcon_password,@env,@autostart_on_join,@idle_timeout_minutes,@created_at,@created_by)`
   ).run(server);
 
   const full = getServer(id);
@@ -391,9 +365,6 @@ export async function updateServer(id, patch, actor) {
   if (patch.host_port !== undefined) {
     fields.host_port = validateHostPort(patch.host_port, id);
   }
-  if (patch.cpu_limit !== undefined) {
-    fields.cpu_limit = await validateCpuLimit(patch.cpu_limit);
-  }
 
   if (Object.keys(fields).length) {
     const sets = Object.keys(fields).map((k) => `${k} = @${k}`).join(', ');
@@ -403,7 +374,7 @@ export async function updateServer(id, patch, actor) {
 
   // Port bindings are fixed at container creation, so changing one means
   // rebuilding the container against the same volume.
-  const needsRecreate = ['type', 'version', 'memory', 'seed', 'env', 'host_port', 'cpu_limit'].some(
+  const needsRecreate = ['type', 'version', 'memory', 'seed', 'env', 'host_port'].some(
     (k) => k in fields
   );
   const updated = getServer(id);

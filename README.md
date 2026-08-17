@@ -216,10 +216,9 @@ that volume alone is enough to recover. Copy both somewhere off the host if the
 backups matter. Snapshots taken before this change are still `.tar.gz` files and
 remain listed, downloadable and restorable through the old path.
 
-**Resource limits.** Each server gets a memory ceiling derived from its heap, and
-optionally a CPU ceiling in cores so one server generating chunks cannot starve
-the rest. Container logs are capped and rotated, because Docker's default keeps
-every line forever and slowly fills the disk.
+**Resource limits.** Each server gets a memory ceiling derived from its heap.
+Container logs are capped and rotated, because Docker's default keeps every line
+forever and slowly fills the disk.
 
 **Stopping politely.** A stop or restart broadcasts a countdown over RCON before
 pulling the server down, configurable in Settings and skipped when nobody is
