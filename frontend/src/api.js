@@ -43,6 +43,9 @@ export const api = {
 
   start: (id) => request('POST', `/api/servers/${id}/start`),
   stop: (id) => request('POST', `/api/servers/${id}/stop`),
+  stopAndKeepOff: (id) => request('POST', `/api/servers/${id}/stop`, { keepOff: true }),
+  setAutostart: (id, on) =>
+    request('PATCH', `/api/servers/${id}`, { autostart_on_join: on, apply: false }),
   restart: (id) => request('POST', `/api/servers/${id}/restart`),
   recreate: (id) => request('POST', `/api/servers/${id}/recreate`),
 

@@ -277,7 +277,30 @@ async function warnPlayers(server, verb) {
   return window;
 }
 
-export async function stopServer(id, actor, { reason, warn = true } = {}) {
+const stopping = new Map(); // id -> Promise
+
+/**
+ * Two overlapping stops used to run two countdowns at once, so players saw the
+ * warnings doubled. A manual stop racing the idle auto-stop is enough to cause
+ * it, so callers now join whatever stop is already in flight.
+ */
+export function stopServer(id, actor, opts = {}) {
+  // Applied before joining an in-flight stop, so "stop and keep off" still
+  // takes effect when a stop is already under way.
+  if (opts.disableAutostart) {
+    db.prepare('UPDATE servers SET autostart_on_join = 0 WHERE id = ?').run(id);
+    audit(actor, id, 'server.autostart', 'disabled');
+  }
+
+  const existing = stopping.get(id);
+  if (existing) return existing;
+
+  const p = doStop(id, actor, opts).finally(() => stopping.delete(id));
+  stopping.set(id, p);
+  return p;
+}
+
+async function doStop(id, actor, { reason, warn = true } = {}) {
   const server = getServer(id);
   if (!server) throw httpError(404, 'no such server');
   const st = await containerState(server.container_name);

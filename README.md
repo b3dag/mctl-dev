@@ -222,7 +222,13 @@ forever and slowly fills the disk.
 
 **Stopping politely.** A stop or restart broadcasts a countdown over RCON before
 pulling the server down, configurable in Settings and skipped when nobody is
-online, so the idle auto-stop stays immediate.
+online, so the idle auto-stop stays immediate. Overlapping stops collapse into
+one, so a manual stop racing the idle auto-stop cannot double the countdown.
+
+**Stop and keep off.** A plain stop leaves wake-on-join armed, so the next player
+to connect starts the server again. **Stop and keep off** stops it and disarms
+wake-on-join in one go: connecting players are told the server is offline until
+you enable it again from the server page.
 
 **Resource footprint.** Each running Minecraft server is a JVM; the manager
 itself is a small Node process. Wake-on-join plus idle auto-stop is what makes a

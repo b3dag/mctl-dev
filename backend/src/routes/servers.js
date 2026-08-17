@@ -125,7 +125,11 @@ router.post('/:id/start', loadServer, async (req, res, next) => {
 
 router.post('/:id/stop', loadServer, async (req, res, next) => {
   try {
-    res.json({ state: await stopServer(req.params.id, req.user) });
+    // keepOff also turns wake-on-join off, so nothing brings it straight back.
+    const state = await stopServer(req.params.id, req.user, {
+      disableAutostart: req.body?.keepOff === true,
+    });
+    res.json({ state, server: shape(getServer(req.params.id)) });
   } catch (e) {
     next(e);
   }

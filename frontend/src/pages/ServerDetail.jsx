@@ -59,20 +59,45 @@ export default function ServerDetail({ states = {}, onChange }) {
               <span>{state.online ?? 0}{state.max ? `/${state.max}` : ''} online</span>
             )}
             <span>{server.type} {server.version}</span>
+            {!server.autostartOnJoin && <span className="pill">wake-on-join off</span>}
           </div>
         </div>
         <div className="row wrap" style={{ gap: 6 }}>
           {state.running ? (
             <>
-              <button className="sm" disabled={busy} onClick={() => act(api.stop, 'Stopping…')}>Stop</button>
-              <button className="sm" disabled={busy} onClick={() => act(api.restart, 'Restarting…')}>Restart</button>
+              <button className="sm" disabled={busy} onClick={() => act(api.stop, 'Stopping')}>Stop</button>
+              <button
+                className="sm"
+                disabled={busy}
+                title="Stop it and stop waking it up when players connect"
+                onClick={() => act(api.stopAndKeepOff, 'Stopping and staying off')}
+              >
+                Stop and keep off
+              </button>
+              <button className="sm" disabled={busy} onClick={() => act(api.restart, 'Restarting')}>Restart</button>
             </>
           ) : (
-            <button className="sm primary" disabled={busy} onClick={() => act(api.start, 'Starting…')}>Start</button>
+            <button className="sm primary" disabled={busy} onClick={() => act(api.start, 'Starting')}>Start</button>
           )}
           <button className="sm danger" onClick={() => setConfirmDelete(true)}>Delete</button>
         </div>
       </div>
+
+      {!server.autostartOnJoin && (
+        <div className="card row between wrap" style={{ gap: 8 }}>
+          <div className="small">
+            Wake-on-join is off, so connecting players are told the server is offline instead of
+            starting it.
+          </div>
+          <button
+            className="sm"
+            disabled={busy}
+            onClick={() => run(async () => { await api.setAutostart(id, true); load(); onChange?.(); }, 'Wake-on-join enabled')}
+          >
+            Enable wake-on-join
+          </button>
+        </div>
+      )}
 
       <div className="card">
         <table>

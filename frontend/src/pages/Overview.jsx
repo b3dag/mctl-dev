@@ -57,7 +57,10 @@ export default function Overview({ servers, states, me, onChange }) {
                   <tr key={s.id}>
                     <td>
                       <Link to={`/servers/${s.id}`} style={{ color: 'inherit', fontWeight: 500 }}>{s.name}</Link>
-                      <div className="muted small">{s.type} {s.version}</div>
+                      <div className="muted small">
+                        {s.type} {s.version}
+                        {!s.autostartOnJoin && <span className="pill" style={{ marginLeft: 6 }}>wake off</span>}
+                      </div>
                     </td>
                     <td>
                       <button
@@ -95,6 +98,14 @@ export default function Overview({ servers, states, me, onChange }) {
                       {state.running ? (
                         <>
                           <button className="sm" disabled={busy} onClick={() => act(s.id, api.stop, `${s.name} stopping`)}>Stop</button>{' '}
+                          <button
+                            className="sm"
+                            disabled={busy}
+                            title="Stop it and stop waking it up when players connect"
+                            onClick={() => act(s.id, api.stopAndKeepOff, `${s.name} stopping and staying off`)}
+                          >
+                            Keep off
+                          </button>{' '}
                           <button className="sm" disabled={busy} onClick={() => act(s.id, api.restart, `${s.name} restarting`)}>Restart</button>
                         </>
                       ) : (
