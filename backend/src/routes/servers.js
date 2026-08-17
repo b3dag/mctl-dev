@@ -20,6 +20,7 @@ import { rconCommand, playerList } from '../rcon.js';
 import { statsHistory, currentStats, diskUsage } from '../monitor.js';
 import { containerState } from '../docker.js';
 import { stripFormatting } from '../text.js';
+import * as lists from '../playerlists.js';
 
 export const router = Router();
 
@@ -178,52 +179,132 @@ router.get('/:id/players', loadServer, async (req, res, next) => {
   }
 });
 
-const player = (v) => {
-  const name = String(v || '').trim();
-  if (!/^[A-Za-z0-9_.]{1,32}$/.test(name)) throw httpError(400, `invalid player name: ${name}`);
-  return name;
-};
+// --- whitelist, operators and bans ------------------------------------------
 
-const PLAYER_ACTIONS = {
-  kick: (n, reason) => `kick ${n}${reason ? ` ${reason}` : ''}`,
-  ban: (n, reason) => `ban ${n}${reason ? ` ${reason}` : ''}`,
-  pardon: (n) => `pardon ${n}`,
-  op: (n) => `op ${n}`,
-  deop: (n) => `deop ${n}`,
-  'whitelist-add': (n) => `whitelist add ${n}`,
-  'whitelist-remove': (n) => `whitelist remove ${n}`,
-};
-
-router.post('/:id/players/:action', loadServer, async (req, res, next) => {
+/**
+ * All of these apply live over RCON when the server is up, and are written
+ * straight into the JSON when it is not, so nothing here needs a restart.
+ */
+router.get('/:id/players/lists', loadServer, async (req, res, next) => {
   try {
-    const build = PLAYER_ACTIONS[req.params.action];
-    if (!build) throw httpError(404, `unknown action ${req.params.action}`);
-    const name = player(req.body?.player);
-    const reason = req.body?.reason ? String(req.body.reason).replace(/[\r\n]/g, ' ').slice(0, 120) : '';
-    const output = await rconCommand(req.server, build(name, reason));
-    audit(req.user, req.server.id, `player.${req.params.action}`, name);
-    res.json({ output });
+    res.json(await lists.readLists(req.server));
   } catch (e) {
     next(e);
   }
 });
 
-router.post('/:id/ban-ip', loadServer, async (req, res, next) => {
+const reason = (v) => (v ? String(v).replace(/[\r\n]/g, " ").slice(0, 120) : "");
+
+function record(req, action, detail) {
+  audit(req.user, req.server.id, action, detail);
+}
+
+router.post('/:id/players/kick', loadServer, async (req, res, next) => {
   try {
-    const ip = String(req.body?.ip || '').trim();
-    if (!/^[0-9a-fA-F:.]{3,45}$/.test(ip)) throw httpError(400, 'invalid IP address');
-    const reason = req.body?.reason ? String(req.body.reason).replace(/[\r\n]/g, ' ').slice(0, 120) : '';
-    const output = await rconCommand(req.server, `ban-ip ${ip}${reason ? ` ${reason}` : ''}`);
-    audit(req.user, req.server.id, 'player.ban-ip', ip);
-    res.json({ output });
+    const name = lists.validName(req.body?.player);
+    const out = await lists.kick(req.server, name, reason(req.body?.reason));
+    record(req, 'player.kick', name);
+    res.json(out);
   } catch (e) {
     next(e);
   }
 });
 
-router.get('/:id/whitelist', loadServer, async (req, res, next) => {
+router.post('/:id/whitelist', loadServer, async (req, res, next) => {
   try {
-    res.json({ output: await rconCommand(req.server, 'whitelist list') });
+    const name = lists.validName(req.body?.player);
+    const out = await lists.addToWhitelist(req.server, name, req.user);
+    record(req, 'whitelist.add', `${name} via ${out.via}`);
+    res.json(out);
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.delete('/:id/whitelist/:player', loadServer, async (req, res, next) => {
+  try {
+    const name = lists.validName(req.params.player);
+    const out = await lists.removeFromWhitelist(req.server, name, req.user);
+    record(req, 'whitelist.remove', `${name} via ${out.via}`);
+    res.json(out);
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.put('/:id/whitelist/enabled', loadServer, async (req, res, next) => {
+  try {
+    const enabled = req.body?.enabled === true;
+    const out = await lists.setWhitelistEnabled(req.server, enabled);
+    record(req, 'whitelist.enabled', String(enabled));
+    res.json(out);
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post('/:id/ops', loadServer, async (req, res, next) => {
+  try {
+    const name = lists.validName(req.body?.player);
+    const level = req.body?.level === undefined ? undefined : Math.min(4, Math.max(1, Number(req.body.level)));
+    const out = await lists.addOp(req.server, name, level, req.user);
+    record(req, 'op.add', `${name} via ${out.via}`);
+    res.json(out);
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.delete('/:id/ops/:player', loadServer, async (req, res, next) => {
+  try {
+    const name = lists.validName(req.params.player);
+    const out = await lists.removeOp(req.server, name, req.user);
+    record(req, 'op.remove', `${name} via ${out.via}`);
+    res.json(out);
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post('/:id/bans', loadServer, async (req, res, next) => {
+  try {
+    const name = lists.validName(req.body?.player);
+    const out = await lists.banPlayer(req.server, name, reason(req.body?.reason), req.user);
+    record(req, 'ban.add', `${name} via ${out.via}`);
+    res.json(out);
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.delete('/:id/bans/:player', loadServer, async (req, res, next) => {
+  try {
+    const name = lists.validName(req.params.player);
+    const out = await lists.pardonPlayer(req.server, name, req.user);
+    record(req, 'ban.remove', `${name} via ${out.via}`);
+    res.json(out);
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post('/:id/ban-ips', loadServer, async (req, res, next) => {
+  try {
+    const ip = lists.validIp(req.body?.ip);
+    const out = await lists.banIp(req.server, ip, reason(req.body?.reason), req.user);
+    record(req, 'banip.add', `${ip} via ${out.via}`);
+    res.json(out);
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.delete('/:id/ban-ips/:ip', loadServer, async (req, res, next) => {
+  try {
+    const ip = lists.validIp(req.params.ip);
+    const out = await lists.pardonIp(req.server, ip, req.user);
+    record(req, 'banip.remove', `${ip} via ${out.via}`);
+    res.json(out);
   } catch (e) {
     next(e);
   }

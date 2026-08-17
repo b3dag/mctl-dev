@@ -42,8 +42,6 @@ export const ENV_CATALOG = [
       { key: 'ENFORCE_WHITELIST', label: 'Enforce whitelist', type: 'bool', default: 'false' },
       { key: 'MAX_TICK_TIME', label: 'Max tick time (ms, -1 disables watchdog)', type: 'number' },
       { key: 'ENABLE_COMMAND_BLOCK', label: 'Enable command blocks', type: 'bool', default: 'false' },
-      { key: 'OPS', label: 'Ops (comma separated)', type: 'text' },
-      { key: 'WHITELIST', label: 'Whitelist (comma separated)', type: 'text' },
       { key: 'ICON', label: 'Server icon URL', type: 'text' },
       { key: 'OVERRIDE_SERVER_PROPERTIES', label: 'Re-apply env to server.properties on boot', type: 'bool', default: 'true' },
     ],
@@ -58,6 +56,11 @@ export const ENV_CATALOG = [
   },
 ];
 
+/**
+ * OPS and WHITELIST are deliberately absent: the Players tab manages both
+ * lists live, and having a second comma-separated copy in the environment
+ * would fight with it every time the container was recreated.
+ */
 export const SERVER_TYPES = [
   { value: 'VANILLA', label: 'Vanilla', mods: null },
   { value: 'PAPER', label: 'Paper', mods: 'plugins' },

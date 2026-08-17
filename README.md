@@ -185,8 +185,23 @@ container's facts, and recent activity for that server.
 
 **Console** streams the container log and sends commands over RCON.
 
-**Players** lists who is online with kick, ban, ban-ip, pardon, op/deop and
-whitelist.
+**Players** manages who is online, the whitelist, the operators and both ban
+lists as real lists rather than comma-separated text, and none of it needs a
+restart.
+
+Minecraft keeps all four as JSON beside the world and RCON edits them live, so
+mctl reads the files (which works stopped or running) and writes through RCON
+when the server is up, letting the server apply the change immediately and own
+the file. With the server stopped it edits the JSON directly, so a whitelist can
+be prepared before first boot; adding someone new that way needs a Mojang lookup
+for their UUID, which the running server would otherwise do itself.
+
+The whitelist can also be switched on and off from here, which needs the server
+running because it is a live command.
+
+Because this owns those lists, the `OPS` and `WHITELIST` environment variables
+are deliberately not offered in Settings: a second comma-separated copy would
+fight with it every time the container was recreated.
 
 **Files** browses `/data`, edits configs in place, uploads, deletes, renames and
 downloads folders as a zip.
