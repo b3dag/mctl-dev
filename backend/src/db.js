@@ -59,6 +59,8 @@ CREATE TABLE IF NOT EXISTS audit_log (
 CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_log(at DESC);
 `);
 
+db.exec('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+
 // --- migrations -------------------------------------------------------------
 // Additive only, guarded so an existing database upgrades in place on boot.
 const columns = (table) => db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
@@ -79,6 +81,20 @@ if (serverColumns.includes('cpu_limit')) {
   } catch {
     /* older SQLite cannot drop columns; an unused column is harmless */
   }
+}
+
+// The shutdown countdown started life as one global value, but it is a
+// lifecycle behaviour like the idle timeout, so it lives on the server.
+if (!serverColumns.includes('stop_warning_seconds')) {
+  db.exec('ALTER TABLE servers ADD COLUMN stop_warning_seconds INTEGER');
+  // Carry over whatever the global setting was, so nobody loses their value.
+  const prior = db
+    .prepare("SELECT value FROM settings WHERE key = 'stopWarningSeconds'")
+    .all()
+    .map((r) => Number(r.value))
+    .find((n) => Number.isFinite(n));
+  db.prepare('UPDATE servers SET stop_warning_seconds = ?').run(prior ?? 30);
+  db.prepare("DELETE FROM settings WHERE key = 'stopWarningSeconds'").run();
 }
 
 // Backups moved from one tar.gz per snapshot to a deduplicated restic repo.

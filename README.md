@@ -173,8 +173,8 @@ recent snapshot and schedule. Per-server snapshot lists live on the server.
 
 **Activity** is the audit trail, filterable by person and searchable.
 
-**Settings** is genuinely global: base domain, host address for direct ports,
-and the shutdown countdown.
+**Settings** is genuinely global: the base domain and the host address used for
+directly published servers. Anything that varies per server lives on the server.
 
 ### Inside a server
 
@@ -197,7 +197,8 @@ upload a jar, install from a URL, or search Modrinth filtered to this server.
 **Backups** is this server's snapshots and its schedule.
 
 **Settings** is grouped rather than one long form: Identity, Connection,
-Runtime, Behaviour, the game's own settings, Advanced for any other environment
+Runtime, Behaviour (wake-on-join, idle stop, and how long to warn players before
+a shutdown), the game's own settings, Advanced for any other environment
 variable, and Danger for deleting.
 
 ## Deployment notes
@@ -233,8 +234,9 @@ Container logs are capped and rotated, because Docker's default keeps every line
 forever and slowly fills the disk.
 
 **Stopping politely.** A stop or restart broadcasts a countdown over RCON before
-pulling the server down, configurable in Settings and skipped when nobody is
-online, so the idle auto-stop stays immediate. Overlapping stops collapse into
+pulling the server down. It is set per server alongside the idle timeout, since
+a test box and a survival world want different answers, and it is skipped when
+nobody is online so the idle auto-stop stays immediate. Overlapping stops collapse into
 one, so a manual stop racing the idle auto-stop cannot double the countdown.
 
 **Stop and keep off.** A plain stop leaves wake-on-join armed, so the next player

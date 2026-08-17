@@ -18,6 +18,7 @@ export default function Settings({ server, me, onSaved, onDelete }) {
     memory: server.memory,
     autostart_on_join: server.autostartOnJoin,
     idle_timeout_minutes: server.idleTimeoutMinutes,
+    stop_warning_seconds: server.stopWarningSeconds,
   });
   const [env, setEnv] = useState(server.env || {});
   const [rawKey, setRawKey] = useState('');
@@ -47,6 +48,7 @@ export default function Settings({ server, me, onSaved, onDelete }) {
         ...core,
         host_port: core.host_port === '' ? null : Number(core.host_port),
         idle_timeout_minutes: Number(core.idle_timeout_minutes),
+        stop_warning_seconds: Number(core.stop_warning_seconds),
         env,
         apply,
       });
@@ -145,10 +147,26 @@ export default function Settings({ server, me, onSaved, onDelete }) {
         <div className="hint" style={{ marginBottom: 12 }}>
           With this off, players are told the server is offline instead of waking it.
         </div>
-        <div className="field" style={{ maxWidth: 220, marginBottom: 0 }}>
-          <label>Stop after idle, in minutes</label>
-          <input type="number" min="0" value={core.idle_timeout_minutes} onChange={set('idle_timeout_minutes')} />
-          <div className="hint">0 keeps it running forever.</div>
+        <div className="row wrap" style={{ gap: 12 }}>
+          <div className="field" style={{ maxWidth: 220, marginBottom: 0 }}>
+            <label>Stop after idle, in minutes</label>
+            <input type="number" min="0" value={core.idle_timeout_minutes} onChange={set('idle_timeout_minutes')} />
+            <div className="hint">0 keeps it running forever.</div>
+          </div>
+          <div className="field" style={{ maxWidth: 220, marginBottom: 0 }}>
+            <label>Warn players before stopping, in seconds</label>
+            <input
+              type="number"
+              min="0"
+              max="120"
+              value={core.stop_warning_seconds}
+              onChange={set('stop_warning_seconds')}
+            />
+            <div className="hint">
+              Broadcast over RCON before a stop or restart. Skipped when nobody is online, so the
+              idle stop stays immediate. 0 turns it off.
+            </div>
+          </div>
         </div>
       </section>
 

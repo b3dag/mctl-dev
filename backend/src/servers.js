@@ -12,7 +12,7 @@ import {
   inspectSafe,
 } from './docker.js';
 import { syncRoutes } from './router.js';
-import { getDomain, getStopWarningSeconds } from './settings.js';
+import { getDomain } from './settings.js';
 import { dropRcon, isReady, playerList, rconCommand } from './rcon.js';
 import { sanitizeEnv, RESERVED_ENV, SERVER_TYPES } from './envcatalog.js';
 
@@ -131,6 +131,15 @@ export function validateHostPort(input, selfId = null) {
   return port;
 }
 
+/** Countdown before a stop or restart, in seconds. 0 turns it off. */
+function validateWarning(input) {
+  if (input === null || input === undefined || input === '') return 30;
+  const n = Number(input);
+  if (!Number.isFinite(n) || n < 0 || n > 120)
+    throw httpError(400, 'the warning countdown must be between 0 and 120 seconds');
+  return Math.trunc(n);
+}
+
 function parseMemory(mem) {
   const m = String(mem).match(/^(\d+)\s*([GMgm])?$/);
   if (!m) return 2 * 1024 ** 3;
@@ -158,6 +167,7 @@ export async function createServer(input, actor) {
     container_name: `mc-${slug}`,
     volume_name: `mctl-${slug}-data`,
     host_port: validateHostPort(input.host_port),
+    stop_warning_seconds: validateWarning(input.stop_warning_seconds),
     type,
     version: String(input.version || 'LATEST'),
     memory: String(input.memory || config.defaultMemory),
@@ -176,10 +186,12 @@ export async function createServer(input, actor) {
     throw httpError(409, `container ${server.container_name} already exists`);
 
   db.prepare(
-    `INSERT INTO servers (id,name,slug,hostname,container_name,volume_name,host_port,type,version,
-       memory,seed,rcon_password,env,autostart_on_join,idle_timeout_minutes,created_at,created_by)
-     VALUES (@id,@name,@slug,@hostname,@container_name,@volume_name,@host_port,@type,@version,
-       @memory,@seed,@rcon_password,@env,@autostart_on_join,@idle_timeout_minutes,@created_at,@created_by)`
+    `INSERT INTO servers (id,name,slug,hostname,container_name,volume_name,host_port,
+       stop_warning_seconds,type,version,memory,seed,rcon_password,env,autostart_on_join,
+       idle_timeout_minutes,created_at,created_by)
+     VALUES (@id,@name,@slug,@hostname,@container_name,@volume_name,@host_port,
+       @stop_warning_seconds,@type,@version,@memory,@seed,@rcon_password,@env,@autostart_on_join,
+       @idle_timeout_minutes,@created_at,@created_by)`
   ).run(server);
 
   const full = getServer(id);
@@ -255,7 +267,7 @@ async function waitReady(server) {
  * never waits: by definition it only fires on an empty server.
  */
 async function warnPlayers(server, verb) {
-  const window = Math.min(getStopWarningSeconds(), 120);
+  const window = Math.min(server.stop_warning_seconds ?? 30, 120);
   if (!window) return 0;
 
   let online = 0;
@@ -387,6 +399,9 @@ export async function updateServer(id, patch, actor) {
 
   if (patch.host_port !== undefined) {
     fields.host_port = validateHostPort(patch.host_port, id);
+  }
+  if (patch.stop_warning_seconds !== undefined) {
+    fields.stop_warning_seconds = validateWarning(patch.stop_warning_seconds);
   }
 
   if (Object.keys(fields).length) {

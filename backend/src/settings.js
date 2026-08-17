@@ -60,18 +60,10 @@ export const routerAddress = (server) =>
 export const directAddress = (server) =>
   server.host_port ? `${getPublicHost()}:${server.host_port}` : null;
 
-/** Seconds of countdown before a stop or restart. 0 disables the warning. */
-export function getStopWarningSeconds() {
-  const raw = read('stopWarningSeconds');
-  const n = raw === null ? 30 : Number(raw);
-  return Number.isFinite(n) && n >= 0 ? Math.min(Math.trunc(n), 120) : 30;
-}
-
 export function getSettings() {
   return {
     domain: getDomain(),
     publicHost: getPublicHost(),
-    stopWarningSeconds: getStopWarningSeconds(),
     domainFromEnv: read('domain') === null,
     publicHostFromEnv: read('publicHost') === null,
     envDomain: config.domain,
@@ -86,25 +78,13 @@ export function saveSettings(patch, actor) {
   const before = {
     domain: getDomain(),
     publicHost: getPublicHost(),
-    stopWarningSeconds: getStopWarningSeconds(),
   };
 
   if (patch.domain !== undefined) write('domain', normalizeHost(patch.domain, 'Domain'));
   if (patch.publicHost !== undefined) write('publicHost', normalizeHost(patch.publicHost, 'Public host'));
-  if (patch.stopWarningSeconds !== undefined) {
-    const n = Number(patch.stopWarningSeconds);
-    if (!Number.isFinite(n) || n < 0 || n > 120) {
-      const e = new Error('Warning countdown must be between 0 and 120 seconds');
-      e.status = 400;
-      throw e;
-    }
-    write('stopWarningSeconds', Math.trunc(n));
-  }
-
   const after = {
     domain: getDomain(),
     publicHost: getPublicHost(),
-    stopWarningSeconds: getStopWarningSeconds(),
   };
   const changed = Object.keys(after).filter((k) => after[k] !== before[k]);
   if (changed.length) audit(actor, null, 'settings.update', changed.map((k) => `${k}=${after[k]}`).join(' '));

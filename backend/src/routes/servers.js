@@ -47,6 +47,7 @@ const shape = (s) => ({
   env: s.env,
   autostartOnJoin: !!s.autostart_on_join,
   idleTimeoutMinutes: s.idle_timeout_minutes,
+  stopWarningSeconds: s.stop_warning_seconds ?? 30,
   createdAt: s.created_at,
   lastActiveAt: s.last_active_at,
   state: stateOf(s.id),
