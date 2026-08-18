@@ -10,6 +10,8 @@ import {
   removeVolume,
   containerState,
   inspectSafe,
+  runHelper,
+  volumeOwner,
 } from './docker.js';
 import { syncRoutes } from './router.js';
 import { getDomain } from './settings.js';
@@ -230,6 +232,7 @@ async function doStart(id, actor) {
 
   setState(id, { phase: 'starting' });
   audit(actor, id, 'server.start');
+  await repairOwnership(server);
   await docker.getContainer(server.container_name).start();
   setState(id, { running: true, state: 'running', phase: 'starting' });
   await syncRoutes(allStates());
@@ -238,6 +241,34 @@ async function doStart(id, actor) {
   // container so the player's reconnect lands in the right place.
   waitReady(server).catch(() => {});
   return stateOf(id);
+}
+
+/**
+ * Earlier versions wrote files into the volume as root, which the image then
+ * could not rewrite. Config files live at the top of /data, so a shallow sweep
+ * fixes the damage without walking a whole world.
+ */
+async function repairOwnership(server) {
+  try {
+    const { uid, gid } = await volumeOwner(server.volume_name);
+    // busybox find has no -uid, only -user, and silently fails the whole
+    // expression if you use the wrong one.
+    // The backslash before the semicolon has to survive the template literal,
+    // otherwise find receives a bare ; and refuses the -exec.
+    const { code, output } = await runHelper(
+      server.volume_name,
+      `find /data -maxdepth 2 ! -path /data -user root -print -exec chown ${uid}:${gid} {} \\;`
+    );
+    const fixed = String(output).trim();
+    if (code !== 0) {
+      console.error(`[servers] ${server.slug}: ownership sweep failed: ${fixed}`);
+    } else if (fixed) {
+      console.log(`[servers] ${server.slug}: took ownership of
+${fixed}`);
+    }
+  } catch (e) {
+    console.error(`[servers] ${server.slug}: ownership check failed:`, e.message);
+  }
 }
 
 async function waitReady(server) {

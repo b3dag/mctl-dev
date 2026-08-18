@@ -246,11 +246,40 @@ export async function readFileFromContainer(containerName, filePath) {
 }
 
 /** Write a Buffer to a container path (works on stopped containers too). */
-export async function writeFileToContainer(containerName, filePath, buffer, mode = 0o644) {
+/**
+ * Ownership of a server's /data, cached per volume.
+ *
+ * The manager runs as root but the Minecraft image runs as uid 1000, so
+ * anything written into the volume has to be given the container's ownership.
+ * Otherwise the file lands owned by root and the server cannot write it again,
+ * which surfaces much later as a permission error on the next boot.
+ */
+const ownerCache = new Map();
+
+export async function volumeOwner(volumeName) {
+  if (ownerCache.has(volumeName)) return ownerCache.get(volumeName);
+  let owner = { uid: 1000, gid: 1000 };
+  try {
+    const { output } = await runHelper(volumeName, "stat -c '%u %g' /data");
+    const [uid, gid] = String(output).trim().split(/\s+/).map(Number);
+    if (Number.isFinite(uid) && Number.isFinite(gid)) owner = { uid, gid };
+  } catch {
+    /* fall back to the image's default */
+  }
+  ownerCache.set(volumeName, owner);
+  return owner;
+}
+
+export async function writeFileToContainer(
+  containerName,
+  filePath,
+  buffer,
+  { mode = 0o644, uid = 0, gid = 0 } = {}
+) {
   const dir = filePath.replace(/\/[^/]*$/, '') || '/';
   const base = filePath.split('/').pop();
   const pack = tar.pack();
-  pack.entry({ name: base, mode, size: buffer.length }, buffer);
+  pack.entry({ name: base, mode, size: buffer.length, uid, gid }, buffer);
   pack.finalize();
   await docker.getContainer(containerName).putArchive(pack, { path: dir });
 }

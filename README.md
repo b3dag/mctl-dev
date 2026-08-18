@@ -225,6 +225,12 @@ its container to reach the socket. Mounting the socket is equivalent to giving
 the manager root on the host; that is inherent to managing containers this way,
 and the reason the auth story matters.
 
+**File ownership.** The manager runs as root but the Minecraft image runs as uid
+1000, so anything mctl writes into a data volume is given the container's
+ownership. A root-owned file there is unwritable by the server and surfaces much
+later as a permission error on its next boot, so starting a server also sweeps
+the top of `/data` for root-owned files and hands them back.
+
 **Data.** Server worlds live in per-server named volumes (`mctl-<slug>-data`).
 Manager state (SQLite) and backups live in the `manager-data` and `backups`
 volumes. Deleting a server through the UI removes its container and volume;

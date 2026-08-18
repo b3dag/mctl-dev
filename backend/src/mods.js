@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { modDirFor } from './envcatalog.js';
 import { httpError } from './servers.js';
-import { runHelper, writeFileToContainer } from './docker.js';
+import { runHelper, writeFileToContainer, volumeOwner } from './docker.js';
 import { listDir, safePath } from './files.js';
 
 const UA = 'mctl/0.1 (self-hosted minecraft manager)';
@@ -58,7 +58,12 @@ export async function installFromBuffer(server, filename, buffer) {
   const { dir } = modContext(server);
   const base = safeJarName(filename);
   await ensureDir(server, dir);
-  await writeFileToContainer(server.container_name, safePath(path.posix.join(dir, base)), buffer);
+  await writeFileToContainer(
+    server.container_name,
+    safePath(path.posix.join(dir, base)),
+    buffer,
+    await volumeOwner(server.volume_name)
+  );
   return { file: base, size: buffer.length, dir };
 }
 

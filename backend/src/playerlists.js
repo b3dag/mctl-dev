@@ -1,4 +1,4 @@
-import { readFileFromContainer, writeFileToContainer, containerState } from './docker.js';
+import { readFileFromContainer, writeFileToContainer, containerState, volumeOwner } from './docker.js';
 import { rconCommand } from './rcon.js';
 import { stateOf, httpError } from './servers.js';
 import { stripFormatting } from './text.js';
@@ -51,10 +51,12 @@ async function readJson(server, file) {
 }
 
 async function writeJson(server, file, list) {
+  // The image runs as uid 1000; a root-owned file here breaks its next boot.
   await writeFileToContainer(
     server.container_name,
     `/data/${file}`,
-    Buffer.from(JSON.stringify(list, null, 2), 'utf8')
+    Buffer.from(JSON.stringify(list, null, 2), 'utf8'),
+    await volumeOwner(server.volume_name)
   );
 }
 
@@ -112,15 +114,25 @@ export async function readLists(server) {
  */
 async function lookupUuid(name) {
   let res;
-  try {
-    res = await fetch(`https://api.mojang.com/users/profiles/minecraft/${encodeURIComponent(name)}`, {
-      headers: { 'user-agent': 'mctl' },
-      signal: AbortSignal.timeout(8000),
-    });
-  } catch (e) {
+  let lastError;
+  // Retried because this is a single outbound call on someone else's network,
+  // and one blocked or dropped request should not fail the whole operation.
+  for (let attempt = 0; attempt < 3 && !res; attempt++) {
+    if (attempt) await new Promise((r) => setTimeout(r, 400 * attempt));
+    try {
+      res = await fetch(`https://api.mojang.com/users/profiles/minecraft/${encodeURIComponent(name)}`, {
+        headers: { 'user-agent': 'mctl' },
+        signal: AbortSignal.timeout(8000),
+      });
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  if (!res) {
     throw httpError(
       503,
-      `could not reach Mojang to look up "${name}" (${e.message}). Start the server and try again.`
+      `could not reach Mojang to look up "${name}" (${lastError?.message}). ` +
+        `Start the server and add them there instead.`
     );
   }
   if (res.status === 404) throw httpError(404, `no Minecraft account called "${name}"`);

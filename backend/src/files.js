@@ -5,6 +5,7 @@ import {
   runHelper,
   readFileFromContainer,
   writeFileToContainer,
+  volumeOwner,
   getArchiveStream,
   putArchiveStream,
 } from './docker.js';
@@ -73,14 +74,19 @@ export async function readText(server, rel) {
 
 export async function writeText(server, rel, content) {
   const full = safePath(rel);
-  await writeFileToContainer(server.container_name, full, Buffer.from(String(content), 'utf8'));
+  await writeFileToContainer(
+    server.container_name,
+    full,
+    Buffer.from(String(content), 'utf8'),
+    await volumeOwner(server.volume_name)
+  );
 }
 
 export async function uploadFile(server, relDir, filename, buffer) {
   const base = path.posix.basename(String(filename));
   if (!base || base === '.' || base === '..') throw httpError(400, 'bad filename');
   const full = safePath(path.posix.join(relDir || '', base));
-  await writeFileToContainer(server.container_name, full, buffer);
+  await writeFileToContainer(server.container_name, full, buffer, await volumeOwner(server.volume_name));
   return { path: full.slice(ROOT.length + 1), size: buffer.length };
 }
 
