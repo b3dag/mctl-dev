@@ -104,6 +104,22 @@ export const directAddress = (server) =>
 export const lanAddress = (server) =>
   server.host_port && detectedLanIp ? `${detectedLanIp}:${server.host_port}` : null;
 
+/** A webhook (Discord-compatible) that crashes, backup failures and low disk space get posted to. Empty means off. */
+export const getWebhookUrl = () => read('webhookUrl') || '';
+
+function normalizeWebhookUrl(input) {
+  const url = String(input ?? '').trim();
+  if (!url) return null;
+  // https for Discord and most public webhook services; http tolerated too,
+  // for a self-hosted receiver (ntfy, Home Assistant, ...) on the local network.
+  if (!/^https?:\/\//i.test(url)) {
+    const e = new Error('Webhook URL must start with http:// or https://');
+    e.status = 400;
+    throw e;
+  }
+  return url;
+}
+
 export function getSettings() {
   return {
     domain: getDomain(),
@@ -114,6 +130,7 @@ export function getSettings() {
     detectedIp,
     detectedLanIp,
     envDomain: config.domain,
+    webhookUrl: getWebhookUrl(),
   };
 }
 
@@ -125,13 +142,16 @@ export function saveSettings(patch, actor) {
   const before = {
     domain: getDomain(),
     publicHost: getPublicHost(),
+    webhookUrl: getWebhookUrl(),
   };
 
   if (patch.domain !== undefined) write('domain', normalizeHost(patch.domain, 'Domain'));
   if (patch.publicHost !== undefined) write('publicHost', normalizeHost(patch.publicHost, 'Public host'));
+  if (patch.webhookUrl !== undefined) write('webhookUrl', normalizeWebhookUrl(patch.webhookUrl));
   const after = {
     domain: getDomain(),
     publicHost: getPublicHost(),
+    webhookUrl: getWebhookUrl(),
   };
   const changed = Object.keys(after).filter((k) => after[k] !== before[k]);
   if (changed.length) audit(actor, null, 'settings.update', changed.map((k) => `${k}=${after[k]}`).join(' '));

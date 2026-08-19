@@ -1,6 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useAsync } from '../ui.jsx';
+
+const CRON_PRESETS = [
+  ['0 4 * * *', 'Daily at 04:00'],
+  ['0 */6 * * *', 'Every 6 hours'],
+  ['0 4 * * 0', 'Weekly, Sunday 04:00'],
+];
 
 /**
  * Grouped by what you came to change, rather than one long form: who it is,
@@ -23,11 +29,20 @@ export default function Settings({ server, me, onSaved, onDelete }) {
   const [env, setEnv] = useState(server.env || {});
   const [rawKey, setRawKey] = useState('');
   const [rawVal, setRawVal] = useState('');
+  const [schedules, setSchedules] = useState([]);
+  const [newKind, setNewKind] = useState('restart');
+  const [newCron, setNewCron] = useState('');
+  const [newCommand, setNewCommand] = useState('');
   const { busy, run } = useAsync();
+
+  const loadSchedules = useCallback(() => {
+    api.schedules(server.id).then((d) => setSchedules(d.schedules)).catch(() => {});
+  }, [server.id]);
 
   useEffect(() => {
     api.meta().then(setMeta).catch(() => {});
   }, []);
+  useEffect(loadSchedules, [loadSchedules]);
 
   const set = (k) => (e) => {
     const v = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
@@ -172,6 +187,110 @@ export default function Settings({ server, me, onSaved, onDelete }) {
               idle stop stays immediate. 0 turns it off.
             </div>
           </div>
+        </div>
+      </section>
+
+      <section className="card">
+        <div className="card-head"><h3>Schedules</h3></div>
+        <div className="hint" style={{ marginTop: 0, marginBottom: 10 }}>
+          A clean restart or a one-line RCON command, on a cron schedule. Applied live, no recreate
+          needed. Skipped entirely while the server is stopped, same as the manual buttons above.
+        </div>
+
+        {schedules.length > 0 && (
+          <table style={{ marginBottom: 12 }}>
+            <thead>
+              <tr>
+                <th style={{ width: 80 }}>Kind</th>
+                <th style={{ width: 130 }}>Cron</th>
+                <th>Command</th>
+                <th style={{ width: 130 }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {schedules.map((s) => (
+                <tr key={s.id}>
+                  <td className="small">{s.kind === 'restart' ? 'Restart' : 'Command'}</td>
+                  <td className="mono small">{s.cron}</td>
+                  <td className="mono small">{s.command || <span className="muted">-</span>}</td>
+                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                    <button
+                      className="sm"
+                      disabled={busy}
+                      onClick={() =>
+                        run(async () => {
+                          await api.setScheduleEnabled(server.id, s.id, !s.enabled);
+                          loadSchedules();
+                        }, s.enabled ? 'Disabled' : 'Enabled')
+                      }
+                    >
+                      {s.enabled ? 'disable' : 'enable'}
+                    </button>{' '}
+                    <button
+                      className="sm danger"
+                      disabled={busy}
+                      onClick={() =>
+                        run(async () => {
+                          await api.deleteSchedule(server.id, s.id);
+                          loadSchedules();
+                        }, 'Removed')
+                      }
+                    >
+                      remove
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        <div className="row wrap" style={{ gap: 10, alignItems: 'flex-end' }}>
+          <div className="field" style={{ width: 130, marginBottom: 0 }}>
+            <label>Kind</label>
+            <select value={newKind} onChange={(e) => setNewKind(e.target.value)}>
+              <option value="restart">Restart</option>
+              <option value="command">Command</option>
+            </select>
+          </div>
+          <div className="field grow" style={{ minWidth: 150, marginBottom: 0 }}>
+            <label>Cron expression</label>
+            <input className="mono" value={newCron} onChange={(e) => setNewCron(e.target.value)} placeholder="0 4 * * *" />
+          </div>
+          {newKind === 'command' && (
+            <div className="field grow" style={{ minWidth: 180, marginBottom: 0 }}>
+              <label>Command</label>
+              <input
+                className="mono"
+                value={newCommand}
+                onChange={(e) => setNewCommand(e.target.value)}
+                placeholder="say the server restarts soon"
+              />
+            </div>
+          )}
+          <button
+            className="primary"
+            disabled={busy || !newCron.trim() || (newKind === 'command' && !newCommand.trim())}
+            onClick={() =>
+              run(async () => {
+                await api.createSchedule(server.id, {
+                  kind: newKind,
+                  cron: newCron.trim(),
+                  command: newKind === 'command' ? newCommand.trim() : undefined,
+                });
+                setNewCron('');
+                setNewCommand('');
+                loadSchedules();
+              }, 'Schedule added')
+            }
+          >
+            Add
+          </button>
+        </div>
+        <div className="row wrap small" style={{ gap: 6, marginTop: 10 }}>
+          {CRON_PRESETS.map(([expr, label]) => (
+            <button key={expr} className="sm ghost" onClick={() => setNewCron(expr)}>{label}</button>
+          ))}
         </div>
       </section>
 

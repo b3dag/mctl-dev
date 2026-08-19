@@ -48,6 +48,21 @@ CREATE TABLE IF NOT EXISTS backup_schedules (
   enabled    INTEGER NOT NULL DEFAULT 1
 );
 
+-- Recurring server-side actions: a clean restart, or a one-line RCON command,
+-- on a cron schedule. Unlike backup_schedules this is many-per-server, since
+-- a restart schedule and an announcement schedule are both reasonable to run
+-- on the same server at once.
+CREATE TABLE IF NOT EXISTS task_schedules (
+  id         TEXT PRIMARY KEY,
+  server_id  TEXT NOT NULL REFERENCES servers(id) ON DELETE CASCADE,
+  kind       TEXT NOT NULL,
+  cron       TEXT NOT NULL,
+  command    TEXT,
+  enabled    INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_task_schedules_server ON task_schedules(server_id);
+
 CREATE TABLE IF NOT EXISTS audit_log (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   at         TEXT NOT NULL,

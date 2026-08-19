@@ -1,13 +1,21 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { StatusDot, PHASE_LABEL, useAsync, useToast, when } from '../ui.jsx';
+
+const BULK_ACTIONS = [
+  ['start', 'Start selected', api.start],
+  ['stop', 'Stop selected', api.stop],
+  ['restart', 'Restart selected', api.restart],
+  ['keepoff', 'Stop and keep off selected', api.stopAndKeepOff],
+];
 
 /** The home screen: every server, its address, and the actions you reach for. */
 export default function ServerList({ servers, states, me, onChange }) {
   const { busy, run } = useAsync();
   const toast = useToast();
   const nav = useNavigate();
+  const [selected, setSelected] = useState(() => new Set());
 
   const act = (id, fn, msg) => run(async () => { await fn(id); onChange?.(); }, msg);
   const copy = (text) => { navigator.clipboard?.writeText(text); toast('Copied'); };
@@ -16,6 +24,29 @@ export default function ServerList({ servers, states, me, onChange }) {
 
   const running = servers.filter((s) => (states[s.id] || s.state || {}).running).length;
   const players = servers.reduce((n, s) => n + ((states[s.id] || {}).online || 0), 0);
+
+  const ids = servers.map((s) => s.id);
+  const allSelected = ids.length > 0 && ids.every((id) => selected.has(id));
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(ids));
+  const toggleOne = (id) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+
+  const runBulk = (fn, label) =>
+    run(async () => {
+      const targets = [...selected];
+      const results = await Promise.allSettled(targets.map((id) => fn(id)));
+      const failed = results.filter((r) => r.status === 'rejected').length;
+      onChange?.();
+      setSelected(new Set());
+      const ok = targets.length - failed;
+      return failed
+        ? `${label}: ${ok} of ${targets.length} succeeded`
+        : `${label}: ${ok} server${ok === 1 ? '' : 's'}`;
+    }).then((msg) => msg && toast(msg));
 
   return (
     <div className="stack">
@@ -37,6 +68,9 @@ export default function ServerList({ servers, states, me, onChange }) {
         <div className="card" style={{ padding: 0 }}>
           <div className="rowlist servers">
             <div className="rowlist-head">
+              <div>
+                <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all servers" />
+              </div>
               <div>Server</div>
               <div>Status</div>
               <div>Address</div>
@@ -46,6 +80,14 @@ export default function ServerList({ servers, states, me, onChange }) {
               const state = states[s.id] || s.state || {};
               return (
                 <div className="rowlist-row" key={s.id}>
+                  <div className="rowlist-cell">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(s.id)}
+                      onChange={() => toggleOne(s.id)}
+                      aria-label={`Select ${s.name}`}
+                    />
+                  </div>
                   <div className="rowlist-cell">
                     <Link to={`/servers/${s.id}`} className="strong">{s.name}</Link>
                     <div className="muted small">
@@ -90,6 +132,18 @@ export default function ServerList({ servers, states, me, onChange }) {
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {selected.size > 0 && (
+        <div className="save-bar">
+          <span className="small">{selected.size} server{selected.size === 1 ? '' : 's'} selected</span>
+          <div className="row wrap" style={{ gap: 6 }}>
+            {BULK_ACTIONS.map(([key, label, fn]) => (
+              <button key={key} className="sm" disabled={busy} onClick={() => runBulk(fn, label)}>{label}</button>
+            ))}
+            <button className="sm ghost" disabled={busy} onClick={() => setSelected(new Set())}>Clear</button>
           </div>
         </div>
       )}

@@ -16,6 +16,7 @@ import { httpError } from './errors.js';
 import { rconCommand } from './rcon.js';
 import { pipeTarIntoZip, zipStream } from './files.js';
 import * as restic from './restic.js';
+import { notify } from './notify.js';
 
 const dirFor = (serverId) => path.join(config.backupDir, serverId);
 
@@ -304,6 +305,8 @@ export function reloadSchedules() {
           await prune(row.server_id, row.keep);
         } catch (e) {
           console.error(`[backup] scheduled backup failed for ${row.server_id}:`, e.message);
+          const server = getServer(row.server_id);
+          notify(`Scheduled backup failed`, `${server?.name || row.server_id}: ${e.message}`);
         }
       },
       { timezone: process.env.TZ || 'UTC' }

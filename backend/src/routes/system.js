@@ -8,6 +8,7 @@ import { db, listServers } from '../db.js';
 import { inspectSafe } from '../docker.js';
 import { getSettings, saveSettings, getDomain, getPublicHost, routerAddress, directAddress, lanAddress } from '../settings.js';
 import * as backups from '../backups.js';
+import { sendTestNotification } from '../notify.js';
 
 export const router = Router();
 
@@ -37,6 +38,15 @@ router.put('/settings', async (req, res, next) => {
       await syncRoutes(allStates());
     }
     res.json({ settings, changed, rehosted });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post('/settings/webhook-test', async (_req, res, next) => {
+  try {
+    await sendTestNotification();
+    res.json({ ok: true });
   } catch (e) {
     next(e);
   }

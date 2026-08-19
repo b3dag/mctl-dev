@@ -20,6 +20,7 @@ import { statsHistory, currentStats, diskUsage } from '../monitor.js';
 import { containerState } from '../docker.js';
 import { stripFormatting } from '../text.js';
 import * as lists from '../playerlists.js';
+import * as schedules from '../schedules.js';
 
 export const router = Router();
 
@@ -332,4 +333,40 @@ router.get('/:id/audit', loadServer, (req, res) => {
       .prepare('SELECT * FROM audit_log WHERE server_id = ? ORDER BY id DESC LIMIT 200')
       .all(req.params.id),
   });
+});
+
+// --- recurring schedules: restart, or a one-line RCON command --------------
+
+router.get('/:id/schedules', loadServer, (req, res) => {
+  res.json({ schedules: schedules.listSchedules(req.server.id) });
+});
+
+router.post('/:id/schedules', loadServer, (req, res, next) => {
+  try {
+    const { kind, cron, command } = req.body || {};
+    res.status(201).json({ schedule: schedules.createSchedule(req.server.id, { kind, cron, command }, req.user) });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.put('/:id/schedules/:scheduleId', loadServer, (req, res, next) => {
+  try {
+    const s = schedules.getSchedule(req.params.scheduleId);
+    if (!s || s.server_id !== req.server.id) throw httpError(404, 'no such schedule');
+    res.json({ schedule: schedules.setScheduleEnabled(s.id, req.body?.enabled !== false, req.user) });
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.delete('/:id/schedules/:scheduleId', loadServer, (req, res, next) => {
+  try {
+    const s = schedules.getSchedule(req.params.scheduleId);
+    if (!s || s.server_id !== req.server.id) throw httpError(404, 'no such schedule');
+    schedules.deleteSchedule(s.id, req.user);
+    res.json({ ok: true });
+  } catch (e) {
+    next(e);
+  }
 });

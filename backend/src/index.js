@@ -8,6 +8,7 @@ import { ping as dockerPing } from './docker.js';
 import { reconcile } from './servers.js';
 import { startMonitor } from './monitor.js';
 import { initBackups } from './backups.js';
+import { initSchedules } from './schedules.js';
 import { startWaker } from './waker.js';
 import { startIpDetection } from './settings.js';
 import { attachWebsockets } from './ws.js';
@@ -65,6 +66,7 @@ async function main() {
   }
 
   await initBackups();
+  initSchedules();
   await reconcile().catch((e) => console.error('[boot] reconcile failed:', e.message));
   startMonitor();
   startWaker();

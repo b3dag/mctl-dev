@@ -33,6 +33,7 @@ export const api = {
   audit: (params) => request('GET', `/api/audit${q(params)}`),
   settings: () => request('GET', '/api/settings'),
   saveSettings: (body) => request('PUT', '/api/settings', body),
+  testWebhook: () => request('POST', '/api/settings/webhook-test'),
 
   // --- servers --------------------------------------------------------------
   listServers: () => request('GET', '/api/servers'),
@@ -42,6 +43,11 @@ export const api = {
   deleteServer: (id, slug, keepData) =>
     request('DELETE', `/api/servers/${id}${q({ confirm: slug, keepData: keepData ? 'true' : undefined })}`),
   serverAudit: (id) => request('GET', `/api/servers/${id}/audit`),
+
+  schedules: (id) => request('GET', `/api/servers/${id}/schedules`),
+  createSchedule: (id, body) => request('POST', `/api/servers/${id}/schedules`, body),
+  setScheduleEnabled: (id, sid, enabled) => request('PUT', `/api/servers/${id}/schedules/${sid}`, { enabled }),
+  deleteSchedule: (id, sid) => request('DELETE', `/api/servers/${id}/schedules/${sid}`),
 
   start: (id) => request('POST', `/api/servers/${id}/start`),
   stop: (id) => request('POST', `/api/servers/${id}/stop`),

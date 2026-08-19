@@ -218,7 +218,7 @@ tr:last-child td { border-bottom: none; }
 .rowlist-cell { min-width: 0; overflow-wrap: anywhere; }
 .rowlist-cell.end { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 6px; }
 
-.rowlist.servers { --cols: 1fr 130px 1fr 220px; }
+.rowlist.servers { --cols: 26px 1fr 130px 1fr 220px; }
 .rowlist.activity { --cols: 92px 150px 1fr; }
 
 .console {

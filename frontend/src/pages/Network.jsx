@@ -22,14 +22,15 @@ export default function Network({ onChange }) {
   useEffect(load, [load]);
 
   const [settings, setSettings] = useState(null);
-  const [form, setForm] = useState({ domain: '', publicHost: '' });
+  const [form, setForm] = useState({ domain: '', publicHost: '', webhookUrl: '' });
   const [saveResult, setSaveResult] = useState(null);
   const { busy: savingSettings, run: runSave } = useAsync();
+  const { busy: testingWebhook, run: runTest } = useAsync();
 
   const loadSettings = useCallback(() => {
     api.settings().then((d) => {
       setSettings(d);
-      setForm({ domain: d.settings.domain, publicHost: d.settings.publicHost });
+      setForm({ domain: d.settings.domain, publicHost: d.settings.publicHost, webhookUrl: d.settings.webhookUrl });
     });
   }, []);
 
@@ -43,7 +44,11 @@ export default function Network({ onChange }) {
   const drifted = data.router.routes.filter((r) => r.drifted);
 
   const setField = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
-  const dirty = settings && (form.domain !== settings.settings.domain || form.publicHost !== settings.settings.publicHost);
+  const dirty =
+    settings &&
+    (form.domain !== settings.settings.domain ||
+      form.publicHost !== settings.settings.publicHost ||
+      form.webhookUrl !== settings.settings.webhookUrl);
 
   const saveSettings = () =>
     runSave(async () => {
@@ -109,7 +114,13 @@ export default function Network({ onChange }) {
             {dirty && (
               <button
                 disabled={savingSettings}
-                onClick={() => setForm({ domain: settings.settings.domain, publicHost: settings.settings.publicHost })}
+                onClick={() =>
+                  setForm({
+                    domain: settings.settings.domain,
+                    publicHost: settings.settings.publicHost,
+                    webhookUrl: settings.settings.webhookUrl,
+                  })
+                }
               >
                 Reset
               </button>
@@ -124,6 +135,35 @@ export default function Network({ onChange }) {
               </ul>
             </div>
           )}
+        </section>
+      )}
+
+      {settings && (
+        <section className="card">
+          <div className="card-head"><h3>Notifications</h3></div>
+          <div className="field">
+            <label>Webhook URL</label>
+            <input
+              className="mono"
+              value={form.webhookUrl}
+              onChange={setField('webhookUrl')}
+              placeholder="https://discord.com/api/webhooks/..."
+              spellCheck={false}
+              autoCapitalize="off"
+            />
+            <div className="hint">
+              Posted to on a server crashing or failing to start, a scheduled backup or task failing,
+              and the backup volume running low on space. Works directly with a Discord webhook; empty
+              turns it off. Save before testing, since the test sends whatever is currently saved.
+            </div>
+          </div>
+          <button
+            className="sm"
+            disabled={testingWebhook || dirty || !form.webhookUrl.trim()}
+            onClick={() => runTest(() => api.testWebhook(), 'Test sent')}
+          >
+            Send test
+          </button>
         </section>
       )}
 

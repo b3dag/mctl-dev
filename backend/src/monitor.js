@@ -4,6 +4,7 @@ import { sampleStats, containerState, runHelper } from './docker.js';
 import { refresh, stopServer } from './servers.js';
 import { stateOf, events, allStates } from './state.js';
 import { buildMappings, currentRoutes, syncRoutes } from './router.js';
+import { notify } from './notify.js';
 
 /**
  * Resource history lives in SQLite rather than memory, so a graph survives a
@@ -100,6 +101,30 @@ async function healRoutes() {
   }
 }
 
+/**
+ * The backups volume is the one most likely to fill up unnoticed (snapshots
+ * accumulate quietly in the background), so it is the one checked. `df`
+ * against a helper container mounting it reports the host filesystem's real
+ * free space, the same as running it on the host directly.
+ */
+let lastDiskWarning = 0;
+async function checkDiskSpace() {
+  try {
+    const { output } = await runHelper(config.backupVolume, "df -Pk /data | tail -1 | awk '{print $4, $5}'");
+    const [availKb, usedPctRaw] = output.trim().split(/\s+/);
+    const usedPct = parseInt(usedPctRaw, 10);
+    const availGb = Number(availKb) / (1024 * 1024);
+    if (!Number.isFinite(usedPct)) return;
+    if (usedPct < 90) return;
+    if (Date.now() - lastDiskWarning < 6 * 60 * 60 * 1000) return; // at most once every 6h
+    lastDiskWarning = Date.now();
+    console.warn(`[monitor] backup volume ${usedPct}% full, ${availGb.toFixed(1)} GB free`);
+    await notify('Backup disk running low', `${usedPct}% used, ${availGb.toFixed(1)} GB free on the backups volume.`);
+  } catch (e) {
+    console.error('[monitor] disk check failed:', e.message);
+  }
+}
+
 export function startMonitor() {
   tick().catch(() => {});
   const t = setInterval(() => tick().catch(() => {}), config.monitorIntervalMs);
@@ -112,6 +137,10 @@ export function startMonitor() {
   pruneHistory();
   const p = setInterval(pruneHistory, 15 * 60000);
   p.unref?.();
+
+  checkDiskSpace().catch(() => {});
+  const d = setInterval(() => checkDiskSpace().catch(() => {}), 30 * 60000);
+  d.unref?.();
 
   return t;
 }

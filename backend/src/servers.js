@@ -18,6 +18,7 @@ import { syncRoutes } from './router.js';
 import { getDomain } from './settings.js';
 import { dropRcon, isReady, playerList, rconCommand } from './rcon.js';
 import { sanitizeEnv, RESERVED_ENV, SERVER_TYPES } from './envcatalog.js';
+import { notify } from './notify.js';
 
 export const slugify = (s) =>
   String(s)
@@ -272,7 +273,10 @@ async function waitReady(server) {
         phase: crashed ? 'crashed' : 'stopped',
         exitCode: crashed ? st.exitCode : null,
       });
-      if (crashed) audit('system', server.id, 'server.crashed', `container exited during startup with code ${st.exitCode}`);
+      if (crashed) {
+        audit('system', server.id, 'server.crashed', `container exited during startup with code ${st.exitCode}`);
+        notify(`${server.name} failed to start`, `Exited during startup with code ${st.exitCode}.`);
+      }
       await syncRoutes(allStates());
       return false;
     }
@@ -494,6 +498,7 @@ export async function refresh(server) {
     patch.exitCode = crashed ? st.exitCode : null;
     if (crashed && prev.phase !== 'crashed') {
       audit('system', server.id, 'server.crashed', `container exited with code ${st.exitCode}`);
+      notify(`${server.name} crashed`, `Exited on its own with code ${st.exitCode}.`);
     }
   } else {
     patch.exitCode = null;
