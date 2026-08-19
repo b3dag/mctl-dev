@@ -99,8 +99,9 @@ export default function Players({ server, state }) {
     <div className="stack">
       {!live && (
         <div className="card hint" style={{ marginTop: 0 }}>
-          The server is not running. Changes here are written straight into its files and take
-          effect when it starts. Adding someone new needs a Mojang lookup for their UUID.
+The server is not running, so everything here is written straight into its files and
+          applies when it starts. Adding someone who has never played here needs a Mojang lookup
+          for their UUID.
         </div>
       )}
 
@@ -131,8 +132,7 @@ export default function Players({ server, state }) {
             </span>
             <button
               className="sm"
-              disabled={busy || !live}
-              title={live ? '' : 'the server must be running to switch this'}
+              disabled={busy}
               onClick={() =>
                 act(() => api.setWhitelistEnabled(server.id, !lists.whitelistEnabled),
                     lists.whitelistEnabled ? 'Whitelist off' : 'Whitelist on')

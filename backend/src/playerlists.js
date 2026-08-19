@@ -1,6 +1,7 @@
 import { readFileFromContainer, writeFileToContainer, containerState, volumeOwner } from './docker.js';
 import { rconCommand } from './rcon.js';
 import { stateOf, httpError } from './servers.js';
+import { db } from './db.js';
 import { stripFormatting } from './text.js';
 
 /**
@@ -182,11 +183,51 @@ export const removeFromWhitelist = (server, name, actor) =>
     apply: async (list) => list.filter((e) => e.name?.toLowerCase() !== name.toLowerCase()),
   });
 
+/**
+ * Enforcement lives in server.properties rather than a JSON list, so the
+ * offline path edits that instead. The stored ENABLE_WHITELIST is kept in step
+ * at the same time, because the image rewrites server.properties from the
+ * environment whenever the container is recreated and would otherwise undo it.
+ */
+/**
+ * Enforcement lives in server.properties rather than a JSON list, so the
+ * offline path edits that file instead.
+ */
 export const setWhitelistEnabled = async (server, enabled) => {
-  if (!(await isLive(server)))
-    throw httpError(409, 'start the server to switch the whitelist on or off');
-  const out = await rconCommand(server, `whitelist ${enabled ? 'on' : 'off'}`);
-  return { via: 'rcon', output: stripFormatting(out).trim() };
+  if (await isLive(server)) {
+    const out = await rconCommand(server, `whitelist ${enabled ? 'on' : 'off'}`);
+    return { via: 'rcon', output: stripFormatting(out).trim() };
+  }
+
+  let text = '';
+  try {
+    text = (await readFileFromContainer(server.container_name, '/data/server.properties')).toString('utf8');
+  } catch {
+    throw httpError(409, 'this server has no server.properties yet; start it once first');
+  }
+
+  const line = `white-list=${enabled}`;
+  const existing = /^white-list\s*=.*$/m;
+  text = existing.test(text)
+    ? text.replace(existing, line)
+    : text.replace(/\n?$/, '\n') + line + '\n';
+
+  await writeFileToContainer(
+    server.container_name,
+    '/data/server.properties',
+    Buffer.from(text, 'utf8'),
+    await volumeOwner(server.volume_name)
+  );
+
+  // The image rewrites server.properties from the environment on recreate, so
+  // the stored value has to agree or the next rebuild would undo this.
+  const env = { ...(server.env || {}), ENABLE_WHITELIST: String(enabled) };
+  db.prepare('UPDATE servers SET env = ? WHERE id = ?').run(JSON.stringify(env), server.id);
+
+  return {
+    via: 'file',
+    output: `Whitelist enforcement ${enabled ? 'on' : 'off'} from the next start.`,
+  };
 };
 
 export const addOp = (server, name, level, actor) =>
