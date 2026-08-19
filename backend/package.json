@@ -3,10 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "start": "node src/index.js",
-    "dev": "node --watch src/index.js"
+    "dev": "node --watch src/index.js",
+    "test": "node test/imports.mjs && node test/run.mjs",
+    "test:imports": "node test/imports.mjs"
   },
   "dependencies": {
     "archiver": "^7.0.1",
@@ -17,6 +21,7 @@
     "node-cron": "^3.0.3",
     "rcon-client": "^4.2.5",
     "tar-stream": "^3.1.7",
+    "unzipper": "^0.12.5",
     "ws": "^8.18.0"
   }
 }

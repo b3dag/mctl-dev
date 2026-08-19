@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { modDirFor } from './envcatalog.js';
-import { httpError } from './servers.js';
+import { httpError } from './errors.js';
 import { runHelper, writeFileToContainer, volumeOwner } from './docker.js';
 import { listDir, safePath } from './files.js';
 

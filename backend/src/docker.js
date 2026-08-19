@@ -54,6 +54,8 @@ export async function containerState(name) {
     running: info.State.Running,
     startedAt: info.State.StartedAt,
     health: info.State.Health?.Status || null,
+    // Only meaningful once the container has actually exited; 0 while running.
+    exitCode: info.State.ExitCode,
     id: info.Id,
   };
 }
@@ -112,7 +114,7 @@ export async function runHelper(volumeName, script, { timeoutMs = 60000 } = {}) 
  * streams. Anything whose stdout we parse as JSON has to demultiplex instead,
  * so tool warnings on stderr cannot corrupt the payload.
  */
-export async function runCapture({ image, cmd, binds, env, timeoutMs = 900000 }) {
+export async function runCapture({ image, cmd, binds, env, timeoutMs = 900000, hostNetwork = false }) {
   await ensureImage(image);
   const container = await docker.createContainer({
     Image: image,
@@ -120,7 +122,7 @@ export async function runCapture({ image, cmd, binds, env, timeoutMs = 900000 })
     Env: env,
     Tty: false,
     Labels: { 'mctl.helper': 'true' },
-    HostConfig: { Binds: binds, AutoRemove: false, NetworkMode: 'none' },
+    HostConfig: { Binds: binds, AutoRemove: false, NetworkMode: hostNetwork ? 'host' : 'none' },
   });
   try {
     const raw = await container.attach({ stream: true, stdout: true, stderr: true });
@@ -149,6 +151,28 @@ export async function runCapture({ image, cmd, binds, env, timeoutMs = 900000 })
     };
   } finally {
     await container.remove({ force: true }).catch(() => {});
+  }
+}
+
+/**
+ * The manager's own network interface is the mctl bridge network, not the
+ * host's, so its LAN address has to be asked of the host itself. A throwaway
+ * container in host network mode can see the real routing table; `route get`
+ * finds the source address the host would actually use to reach the
+ * internet, which is normally the LAN-facing interface other devices use too.
+ */
+export async function detectLanIp() {
+  try {
+    const { code, stdout } = await runCapture({
+      image: config.helperImage,
+      cmd: ['sh', '-c', "ip route get 1 2>/dev/null | sed -n 's/.* src \\([0-9.]*\\).*/\\1/p'"],
+      hostNetwork: true,
+      timeoutMs: 10000,
+    });
+    const ip = stdout.trim().split('\n')[0];
+    return code === 0 && /^\d{1,3}(\.\d{1,3}){3}$/.test(ip) ? ip : null;
+  } catch {
+    return null;
   }
 }
 

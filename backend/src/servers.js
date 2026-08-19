@@ -1,7 +1,8 @@
 import crypto from 'node:crypto';
-import { EventEmitter } from 'node:events';
 import { config } from './config.js';
 import { db, audit, getServer, listServers } from './db.js';
+import { events, stateOf, setState, allStates, forgetState, touch } from './state.js';
+import { httpError, sleep } from './errors.js';
 import {
   docker,
   ensureImage,
@@ -18,28 +19,6 @@ import { getDomain } from './settings.js';
 import { dropRcon, isReady, playerList, rconCommand } from './rcon.js';
 import { sanitizeEnv, RESERVED_ENV, SERVER_TYPES } from './envcatalog.js';
 
-export const events = new EventEmitter();
-
-/** In-memory view of what each server is doing right now. */
-const runtime = new Map(); // id -> { running, state, phase, players, online, max, lastSeen }
-
-export function stateOf(id) {
-  return runtime.get(id) || { running: false, state: 'unknown', phase: 'stopped' };
-}
-
-export function allStates() {
-  const out = {};
-  for (const s of listServers()) out[s.id] = stateOf(s.id);
-  return out;
-}
-
-function setState(id, patch) {
-  const next = { ...stateOf(id), ...patch };
-  runtime.set(id, next);
-  events.emit('state', { id, state: next });
-  return next;
-}
-
 export const slugify = (s) =>
   String(s)
     .toLowerCase()
@@ -55,12 +34,17 @@ function buildEnv(server) {
     EULA: 'TRUE',
     TYPE: server.type,
     VERSION: server.version,
-    MEMORY: server.memory,
     ENABLE_RCON: 'TRUE',
     RCON_PASSWORD: server.rcon_password,
     RCON_PORT: '25575',
     SERVER_PORT: '25565',
     ...server.env,
+    // The dedicated fields always win over anything of the same name that
+    // ended up in the stored env, stale or not: they are the one place each
+    // of these is actually edited, so a leftover catalog copy from before
+    // that field existed (or from an old value) can never quietly override
+    // a newer setting like a memory bump.
+    MEMORY: server.memory,
   };
   if (server.seed) env.SEED = server.seed;
   return Object.entries(env).map(([k, v]) => `${k}=${v}`);
@@ -276,7 +260,19 @@ async function waitReady(server) {
   while (Date.now() < deadline) {
     const st = await containerState(server.container_name);
     if (!st.running) {
-      setState(server.id, { running: false, state: st.state, phase: 'stopped' });
+      // A boot that never reaches ready and exits on its own (a bad mod jar,
+      // a launcher failing to install, an out-of-memory JVM) is the same kind
+      // of surprise as one that dies later, and refresh()'s crash detection
+      // never gets a look at this path since it never went through a 'ready'
+      // phase for that logic to key off of.
+      const crashed = st.exists && !!st.exitCode;
+      setState(server.id, {
+        running: false,
+        state: st.state,
+        phase: crashed ? 'crashed' : 'stopped',
+        exitCode: crashed ? st.exitCode : null,
+      });
+      if (crashed) audit('system', server.id, 'server.crashed', `container exited during startup with code ${st.exitCode}`);
       await syncRoutes(allStates());
       return false;
     }
@@ -467,7 +463,7 @@ export async function deleteServer(id, { deleteVolume = true } = {}, actor) {
   if (deleteVolume) await removeVolume(server.volume_name);
 
   db.prepare('DELETE FROM servers WHERE id = ?').run(id);
-  runtime.delete(id);
+  forgetState(id);
   await syncRoutes(allStates());
   audit(actor, id, 'server.delete', `${server.slug} volume=${deleteVolume}`);
   events.emit('servers');
@@ -476,12 +472,6 @@ export async function deleteServer(id, { deleteVolume = true } = {}, actor) {
 
 // --- status -----------------------------------------------------------------
 
-export function touch(id) {
-  const now = new Date().toISOString();
-  db.prepare('UPDATE servers SET last_active_at = ? WHERE id = ?').run(now, id);
-  setState(id, { lastSeen: now });
-}
-
 /** Refresh container + player state for one server. */
 export async function refresh(server) {
   const st = await containerState(server.container_name);
@@ -489,11 +479,24 @@ export async function refresh(server) {
   const patch = { running: st.running, state: st.state, exists: st.exists };
 
   if (!st.running) {
-    patch.phase = prev.phase === 'starting' ? 'starting' : 'stopped';
+    // A container that was ready (or already flagged crashed) and is now not
+    // running, without doStop() having set 'stopped' itself, exited on its
+    // own: that is a crash, not a stop, and showing it as plain "stopped"
+    // would bury the one thing worth noticing. It has to stay 'crashed' on
+    // every later refresh too, not just the one that first caught it, or the
+    // very next monitor tick quietly downgrades it back to "stopped".
+    const unexpected = prev.phase === 'ready' || prev.phase === 'crashed';
+    const crashed = unexpected && st.exists && !!st.exitCode;
+    patch.phase = prev.phase === 'starting' ? 'starting' : crashed ? 'crashed' : 'stopped';
     if (!st.exists) patch.phase = 'missing';
     patch.online = 0;
     patch.players = [];
+    patch.exitCode = crashed ? st.exitCode : null;
+    if (crashed && prev.phase !== 'crashed') {
+      audit('system', server.id, 'server.crashed', `container exited with code ${st.exitCode}`);
+    }
   } else {
+    patch.exitCode = null;
     try {
       const list = await playerList(server);
       patch.phase = 'ready';
@@ -581,12 +584,3 @@ export async function startAndWait(id, actor = 'waker') {
   return waitReady(server);
 }
 
-export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-export function httpError(status, message) {
-  const e = new Error(message);
-  e.status = status;
-  return e;
-}
-
-export { RESERVED_ENV };

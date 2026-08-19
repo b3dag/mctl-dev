@@ -2,7 +2,8 @@ import net from 'node:net';
 import { config } from './config.js';
 import { getServerByHostname } from './db.js';
 import { packet, parseHandshake, takePacket, writeString } from './mcproto.js';
-import { startAndWait, stateOf } from './servers.js';
+import { startAndWait } from './servers.js';
+import { stateOf } from './state.js';
 
 /**
  * mc-router forwards a stopped server's hostname here instead of to a backend

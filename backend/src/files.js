@@ -9,7 +9,7 @@ import {
   getArchiveStream,
   putArchiveStream,
 } from './docker.js';
-import { httpError } from './servers.js';
+import { httpError } from './errors.js';
 
 const ROOT = '/data';
 
@@ -114,23 +114,30 @@ export async function rename(server, from, to) {
   if (code !== 0) throw httpError(500, output.trim() || 'rename failed');
 }
 
-/** Stream a directory (or file) out as a zip - used for world downloads. */
-export async function zipStream(server, rel, res) {
+/**
+ * Stream a directory (or file) out as a zip. `stripSegments` drops that many
+ * leading path segments from every entry, so the zip's contents sit at its
+ * root instead of nested down - used for world downloads, where the wrapping
+ * path (the world's own folder name, not necessarily the target server's) is
+ * not something worth preserving. Docker's archive API wraps a requested
+ * directory in exactly one segment (its own name), so 1 is always right here.
+ */
+export async function zipStream(server, rel, res, { stripSegments = 0 } = {}) {
   const full = safePath(rel);
   const source = await getArchiveStream(server.container_name, full);
   const zip = archiver('zip', { zlib: { level: 6 } });
   zip.pipe(res);
-  await pipeTarIntoZip(source, zip);
+  await pipeTarIntoZip(source, zip, stripSegments);
   await zip.finalize();
 }
 
-export function pipeTarIntoZip(tarStream, zip, stripFirstSegment = false) {
+export function pipeTarIntoZip(tarStream, zip, stripSegments = 0) {
   return new Promise((resolve, reject) => {
     const extract = tar.extract();
     extract.on('entry', (header, stream, next) => {
       if (header.type === 'file') {
         let name = header.name;
-        if (stripFirstSegment) name = name.split('/').slice(1).join('/');
+        if (stripSegments > 0) name = name.split('/').slice(stripSegments).join('/');
         if (name) zip.append(stream, { name, date: header.mtime });
         else stream.resume();
         stream.on('end', next);

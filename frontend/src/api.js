@@ -53,21 +53,24 @@ export const api = {
   rcon: (id, command) => request('POST', `/api/servers/${id}/rcon`, { command }),
   players: (id) => request('GET', `/api/servers/${id}/players`),
 
-  // Whitelist, operators and bans. All apply live when the server is running
-  // and are written into its files when it is not.
+  // Whitelist, operators and bans. The whitelist is always written to its
+  // file and reloaded live if the server happens to be running; operators and
+  // bans have no such reload command in vanilla, so they only apply live and
+  // need the server running.
   playerLists: (id) => request('GET', `/api/servers/${id}/players/lists`),
   kickPlayer: (id, player, reason) => request('POST', `/api/servers/${id}/players/kick`, { player, reason }),
   addToWhitelist: (id, player) => request('POST', `/api/servers/${id}/whitelist`, { player }),
   removeFromWhitelist: (id, player) =>
     request('DELETE', `/api/servers/${id}/whitelist/${encodeURIComponent(player)}`),
   setWhitelistEnabled: (id, enabled) => request('PUT', `/api/servers/${id}/whitelist/enabled`, { enabled }),
-  addOp: (id, player, level) => request('POST', `/api/servers/${id}/ops`, { player, level }),
+  addOp: (id, player) => request('POST', `/api/servers/${id}/ops`, { player }),
   removeOp: (id, player) => request('DELETE', `/api/servers/${id}/ops/${encodeURIComponent(player)}`),
   banPlayer: (id, player, reason) => request('POST', `/api/servers/${id}/bans`, { player, reason }),
   pardonPlayer: (id, player) => request('DELETE', `/api/servers/${id}/bans/${encodeURIComponent(player)}`),
   banIp: (id, ip, reason) => request('POST', `/api/servers/${id}/ban-ips`, { ip, reason }),
   pardonIp: (id, ip) => request('DELETE', `/api/servers/${id}/ban-ips/${encodeURIComponent(ip)}`),
-  stats: (id, disk) => request('GET', `/api/servers/${id}/stats${q({ disk: disk ? 'true' : undefined })}`),
+  stats: (id, { disk, minutes } = {}) =>
+    request('GET', `/api/servers/${id}/stats${q({ disk: disk ? 'true' : undefined, minutes })}`),
 
   // --- files ----------------------------------------------------------------
   files: (id, path) => request('GET', `/api/servers/${id}/files${q({ path })}`),
@@ -87,6 +90,8 @@ export const api = {
     request('POST', `/api/servers/${id}/backups/${bid}/restore${q({ confirm: slug })}`),
   checkBackups: (id) => request('POST', `/api/servers/${id}/backups/check`),
   setBackupSchedule: (id, body) => request('PUT', `/api/servers/${id}/backups/schedule`, body),
+  worldDownloadUrl: (id) => `/api/servers/${id}/world/download`,
+  uploadWorld: (id, slug, formData) => request('POST', `/api/servers/${id}/world/upload${q({ confirm: slug })}`, formData),
   backupUrl: (id, bid, format) => `/api/servers/${id}/backups/${bid}/download${q({ format })}`,
 
   // --- content --------------------------------------------------------------

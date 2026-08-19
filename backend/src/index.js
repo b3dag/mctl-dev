@@ -9,6 +9,7 @@ import { reconcile } from './servers.js';
 import { startMonitor } from './monitor.js';
 import { initBackups } from './backups.js';
 import { startWaker } from './waker.js';
+import { startIpDetection } from './settings.js';
 import { attachWebsockets } from './ws.js';
 import { router as serverRoutes } from './routes/servers.js';
 import { router as fileRoutes } from './routes/files.js';
@@ -67,6 +68,7 @@ async function main() {
   await reconcile().catch((e) => console.error('[boot] reconcile failed:', e.message));
   startMonitor();
   startWaker();
+  startIpDetection();
 
   server.listen(config.port, '0.0.0.0', () => {
     console.log(`[boot] manager API on :${config.port}`);

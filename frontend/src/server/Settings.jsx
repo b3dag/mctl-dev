@@ -109,9 +109,14 @@ export default function Settings({ server, me, onSaved, onDelete }) {
             placeholder="none"
           />
           <div className="hint">
-            {core.host_port
-              ? <>Also reachable at <code className="mono">{me?.publicHost || 'your-host'}:{core.host_port}</code>, no DNS needed.</>
-              : <>Only reachable by hostname on port {me?.publicMcPort ?? 25565}. Set a port to publish it directly as well.</>}
+            {core.host_port ? (
+              <>
+                Also reachable at <code className="mono">{me?.publicHost || 'your-host'}:{core.host_port}</code>, no DNS needed.
+                {me?.lanHost && <> Players on the same network can use <code className="mono">{me.lanHost}:{core.host_port}</code> instead.</>}
+              </>
+            ) : (
+              <>Only reachable by hostname on port {me?.publicMcPort ?? 25565}. Set a port to publish it directly as well.</>
+            )}
             {' '}Changing this recreates the container.
           </div>
         </div>

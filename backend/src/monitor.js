@@ -1,22 +1,46 @@
 import { config } from './config.js';
 import { db, listServers, audit } from './db.js';
 import { sampleStats, containerState, runHelper } from './docker.js';
-import { refresh, stateOf, stopServer, events, allStates } from './servers.js';
+import { refresh, stopServer } from './servers.js';
+import { stateOf, events, allStates } from './state.js';
 import { buildMappings, currentRoutes, syncRoutes } from './router.js';
 
-/** Ring buffer of resource samples per server, for the graphs. */
-const HISTORY = 180; // ~3h at one sample/min
-const history = new Map(); // id -> [{at,cpuPercent,memUsed,memLimit}]
+/**
+ * Resource history lives in SQLite rather than memory, so a graph survives a
+ * manager restart instead of resetting to nothing, and sampled on its own
+ * faster interval rather than piggybacking on the once-a-minute tick, so the
+ * short-range graph actually has enough points to be worth drawing.
+ */
+const SAMPLE_INTERVAL_MS = 10000; // one sample per server every 10s while running
+const RETENTION_MS = 24 * 60 * 60 * 1000; // a day, no more
 
-export function statsHistory(id) {
-  return history.get(id) || [];
+const insertSample = db.prepare(
+  'INSERT INTO stats_history (server_id, at, cpu_percent, mem_used, mem_limit) VALUES (?,?,?,?,?)'
+);
+const selectHistory = db.prepare(
+  `SELECT at, cpu_percent AS cpuPercent, mem_used AS memUsed, mem_limit AS memLimit
+   FROM stats_history WHERE server_id = ? AND at >= ? ORDER BY at`
+);
+
+/** History for one server, from `sinceMs` milliseconds ago to now. */
+export function statsHistory(id, sinceMs = 10 * 60000) {
+  return selectHistory.all(id, Date.now() - sinceMs);
 }
 
-function push(id, sample) {
-  const arr = history.get(id) || [];
-  arr.push(sample);
-  if (arr.length > HISTORY) arr.splice(0, arr.length - HISTORY);
-  history.set(id, arr);
+async function sampleTick() {
+  for (const server of listServers()) {
+    if (!stateOf(server.id).running) continue;
+    try {
+      const s = await sampleStats(server.container_name);
+      insertSample.run(server.id, s.at, s.cpuPercent, s.memUsed, s.memLimit);
+    } catch {
+      /* container may have just exited */
+    }
+  }
+}
+
+function pruneHistory() {
+  db.prepare('DELETE FROM stats_history WHERE at < ?').run(Date.now() - RETENTION_MS);
 }
 
 const idleSince = new Map(); // id -> ms timestamp when the server went empty
@@ -29,12 +53,6 @@ async function tick() {
       if (!st.running) {
         idleSince.delete(server.id);
         continue;
-      }
-
-      try {
-        push(server.id, await sampleStats(server.container_name));
-      } catch {
-        /* container may have just exited */
       }
 
       // --- idle auto-stop -------------------------------------------------
@@ -86,6 +104,15 @@ export function startMonitor() {
   tick().catch(() => {});
   const t = setInterval(() => tick().catch(() => {}), config.monitorIntervalMs);
   t.unref?.();
+
+  sampleTick().catch(() => {});
+  const s = setInterval(() => sampleTick().catch(() => {}), SAMPLE_INTERVAL_MS);
+  s.unref?.();
+
+  pruneHistory();
+  const p = setInterval(pruneHistory, 15 * 60000);
+  p.unref?.();
+
   return t;
 }
 

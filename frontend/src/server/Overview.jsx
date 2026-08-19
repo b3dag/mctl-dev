@@ -1,34 +1,21 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { api } from '../api.js';
-import { bytes, useToast, when } from '../ui.jsx';
+import { bytes, Chart, ChartModal, stepMax, useToast, when } from '../ui.jsx';
 
-function Spark({ points, max, label }) {
-  if (!points.length) return <div className="muted small">No samples yet.</div>;
-  const w = 300;
-  const h = 56;
-  const top = max || Math.max(...points, 1);
-  const step = points.length > 1 ? w / (points.length - 1) : w;
-  const line = points
-    .map((v, i) => `${i === 0 ? 'M' : 'L'}${(i * step).toFixed(1)},${(h - (v / top) * h).toFixed(1)}`)
-    .join(' ');
-  return (
-    <svg className="spark" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" role="img" aria-label={label}>
-      <path d={`${line} L${w},${h} L0,${h} Z`} className="spark-fill" />
-      <path d={line} className="spark-line" vectorEffect="non-scaling-stroke" />
-    </svg>
-  );
-}
+const pct = (v) => `${Math.round(v)}%`;
+const GB = 1024 ** 3;
 
 /** The server's landing page: where to connect, how it is doing, what changed. */
 export default function Overview({ server, state, me }) {
   const [stats, setStats] = useState(null);
   const [disk, setDisk] = useState(undefined);
   const [activity, setActivity] = useState([]);
+  const [expanded, setExpanded] = useState(null); // 'cpu' | 'memory' | null
   const toast = useToast();
 
   const load = useCallback(
     (withDisk = false) => {
-      api.stats(server.id, withDisk).then((d) => {
+      api.stats(server.id, { disk: withDisk, minutes: 10 }).then((d) => {
         setStats(d);
         if (d.disk !== undefined) setDisk(d.disk);
       }).catch(() => {});
@@ -39,14 +26,26 @@ export default function Overview({ server, state, me }) {
 
   useEffect(() => {
     load();
-    const t = setInterval(() => load(), 15000);
+    const t = setInterval(() => load(), 10000);
     return () => clearInterval(t);
   }, [load]);
 
   const copy = (text) => { navigator.clipboard?.writeText(text); toast('Copied'); };
   const history = stats?.history || [];
-  const cpu = history.map((s) => s.cpuPercent);
-  const mem = history.map((s) => s.memUsed);
+  const cpuPoints = history.map((s) => ({ at: s.at, value: s.cpuPercent }));
+  const memPoints = history.map((s) => ({ at: s.at, value: s.memUsed }));
+  const memLimit = stats?.current?.memLimit ?? history[history.length - 1]?.memLimit ?? null;
+  const cpuMax = stepMax(cpuPoints, 100);
+  const memMax = stepMax(memPoints, GB);
+
+  const loadCpuPoints = useCallback(
+    (minutes) => api.stats(server.id, { minutes }).then((d) => (d.history || []).map((s) => ({ at: s.at, value: s.cpuPercent }))),
+    [server.id]
+  );
+  const loadMemPoints = useCallback(
+    (minutes) => api.stats(server.id, { minutes }).then((d) => (d.history || []).map((s) => ({ at: s.at, value: s.memUsed }))),
+    [server.id]
+  );
 
   return (
     <div className="stack">
@@ -68,6 +67,18 @@ export default function Overview({ server, state, me }) {
                 )}
               </td>
             </tr>
+            {server.directAddress && (
+              <tr>
+                <td className="muted">Same network</td>
+                <td>
+                  {server.lanAddress ? (
+                    <button className="link mono" onClick={() => copy(server.lanAddress)}>{server.lanAddress}</button>
+                  ) : (
+                    <span className="muted">not detected yet</span>
+                  )}
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
         {!server.autostartOnJoin && (
@@ -82,21 +93,37 @@ export default function Overview({ server, state, me }) {
         <section className="card">
           <div className="card-head">
             <h3>CPU</h3>
-            <span className="mono small">{stats?.current ? `${stats.current.cpuPercent.toFixed(1)}%` : 'idle'}</span>
+            <span className={`mono small${state.running ? '' : ' err-text'}`}>
+              {state.running ? (stats?.current ? pct(stats.current.cpuPercent) : 'starting') : 'off'}
+            </span>
           </div>
-          <Spark points={cpu} label="CPU over time" />
-          <div className="hint">{history.length} samples, one a minute</div>
+          {cpuPoints.length === 0 ? (
+            <div className="muted small">No samples yet.</div>
+          ) : (
+            <button className="chart-trigger" onClick={() => setExpanded('cpu')} aria-label="Expand CPU history">
+              <Chart points={cpuPoints} max={cpuMax} windowMs={10 * 60000} compact />
+            </button>
+          )}
+          <div className="hint">Last 10 minutes. Click to see more.</div>
         </section>
 
         <section className="card">
           <div className="card-head">
             <h3>Memory</h3>
-            <span className="mono small">
-              {stats?.current ? `${bytes(stats.current.memUsed)} / ${bytes(stats.current.memLimit)}` : 'idle'}
+            <span className={`mono small${state.running ? '' : ' err-text'}`}>
+              {state.running
+                ? (stats?.current ? `${bytes(stats.current.memUsed)} / ${bytes(stats.current.memLimit)}` : 'starting')
+                : 'off'}
             </span>
           </div>
-          <Spark points={mem} max={stats?.current?.memLimit} label="Memory over time" />
-          <div className="hint">Limit is the heap plus JVM overhead</div>
+          {memPoints.length === 0 || !memLimit ? (
+            <div className="muted small">No samples yet.</div>
+          ) : (
+            <button className="chart-trigger" onClick={() => setExpanded('memory')} aria-label="Expand memory history">
+              <Chart points={memPoints} max={memMax} windowMs={10 * 60000} compact />
+            </button>
+          )}
+          <div className="hint">Last 10 minutes. Current usage against the heap limit is shown above.</div>
         </section>
 
         <section className="card">
@@ -127,23 +154,42 @@ export default function Overview({ server, state, me }) {
 
       <section className="card" style={{ padding: 0 }}>
         <div className="card-head" style={{ padding: '13px 13px 0' }}><h3>Recent activity</h3></div>
-        <table>
-          <tbody>
-            {activity.map((e) => (
-              <tr key={e.id}>
-                <td style={{ width: 110 }} className="muted small" title={new Date(e.at).toLocaleString()}>
-                  {when(e.at)}
-                </td>
-                <td style={{ width: 150 }} className="mono small">{e.action}</td>
-                <td className="small muted">{e.actor || 'system'} {e.detail || ''}</td>
-              </tr>
-            ))}
-            {activity.length === 0 && (
-              <tr><td className="muted small">Nothing recorded yet.</td></tr>
-            )}
-          </tbody>
-        </table>
+        <div className="rowlist activity">
+          {activity.map((e) => (
+            <div className="rowlist-row" key={e.id}>
+              <div className="rowlist-cell muted small" title={new Date(e.at).toLocaleString()}>{when(e.at)}</div>
+              <div className="rowlist-cell mono small">{e.action}</div>
+              <div className="rowlist-cell small muted">{e.actor || 'system'} {e.detail || ''}</div>
+            </div>
+          ))}
+          {activity.length === 0 && (
+            <div className="rowlist-row">
+              <div className="rowlist-cell muted small" style={{ gridColumn: '1 / -1' }}>Nothing recorded yet.</div>
+            </div>
+          )}
+        </div>
       </section>
+
+      {expanded === 'cpu' && (
+        <ChartModal
+          title="CPU"
+          current={stats?.current ? pct(stats.current.cpuPercent) : 'idle'}
+          maxFor={(pts) => stepMax(pts, 100)}
+          load={loadCpuPoints}
+          formatValue={pct}
+          onClose={() => setExpanded(null)}
+        />
+      )}
+      {expanded === 'memory' && memLimit && (
+        <ChartModal
+          title="Memory"
+          current={stats?.current ? `${bytes(stats.current.memUsed)} / ${bytes(stats.current.memLimit)}` : 'idle'}
+          maxFor={(pts) => stepMax(pts, GB)}
+          load={loadMemPoints}
+          formatValue={bytes}
+          onClose={() => setExpanded(null)}
+        />
+      )}
     </div>
   );
 }

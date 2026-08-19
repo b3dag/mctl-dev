@@ -5,12 +5,16 @@ import zlib from 'node:zlib';
 import crypto from 'node:crypto';
 import cron from 'node-cron';
 import archiver from 'archiver';
+import tar from 'tar-stream';
+import unzipper from 'unzipper';
 import { config } from './config.js';
 import { db, audit, getServer, listServers } from './db.js';
-import { putArchiveStream, runHelper, containerState } from './docker.js';
-import { httpError, stopServer, startServer, stateOf } from './servers.js';
+import { putArchiveStream, runHelper, containerState, volumeOwner } from './docker.js';
+import { stopServer, startServer, updateServer } from './servers.js';
+import { stateOf } from './state.js';
+import { httpError } from './errors.js';
 import { rconCommand } from './rcon.js';
-import { pipeTarIntoZip } from './files.js';
+import { pipeTarIntoZip, zipStream } from './files.js';
 import * as restic from './restic.js';
 
 const dirFor = (serverId) => path.join(config.backupDir, serverId);
@@ -134,6 +138,71 @@ export async function restoreBackup(id, { actor, restart = true } = {}) {
   return { restored: b.snapshot_id || b.filename, restarted: wasRunning && restart };
 }
 
+/**
+ * The live world right now, zipped with its own contents at the zip root
+ * rather than wrapped in a folder named after it - the ordinary convention
+ * for a shareable world, and what worldUpload() below expects back. This is
+ * independent of the snapshot system entirely: no backup has to exist first.
+ */
+export async function worldDownloadStream(server, res) {
+  await zipStream(server, worldDirOf(server), res, { stripSegments: 1 });
+}
+
+/**
+ * Replace a server's world with the contents of an uploaded zip - the other
+ * half of worldDownloadStream, meant for moving a world to a different
+ * server by hand rather than through the shared backup repository. Stops the
+ * server, swaps the folder, optionally records a seed for the new world (a
+ * plain settings update, applied before the restart rather than after so it
+ * does not cause a second one), and starts it again if it was running.
+ */
+export async function worldUpload(server, zipBuffer, { actor, seed } = {}) {
+  const st = await containerState(server.container_name);
+  const wasRunning = st.running;
+  if (wasRunning) await stopServer(server.id, actor, { reason: 'world upload', warn: true });
+
+  const owner = await volumeOwner(server.volume_name);
+  const dir = await unzipper.Open.buffer(zipBuffer);
+  const files = dir.files.filter((f) => f.type === 'File');
+  if (!files.length) throw httpError(400, 'that zip has no files in it');
+
+  // Only file entries carry an explicit owner; a subdirectory a file happens
+  // to need (playerdata/, region/, ...) gets created implicitly by whatever
+  // extracts the tar, root-owned, since nothing told it otherwise. The
+  // server can then read what is already there but not create anything new
+  // in it - which is exactly "failed to save player data" for a player who
+  // has never been saved into this particular world before. So every
+  // directory a file lives in gets its own explicit, correctly-owned entry
+  // too, not just the files themselves.
+  const pack = tar.pack();
+  const knownDirs = new Set();
+  const addDir = (dirPath) => {
+    if (!dirPath || knownDirs.has(dirPath)) return;
+    addDir(dirPath.split('/').slice(0, -1).join('/'));
+    knownDirs.add(dirPath);
+    pack.entry({ name: `${dirPath}/`, type: 'directory', uid: owner.uid, gid: owner.gid, mode: 0o755 });
+  };
+  for (const entry of files) {
+    addDir(entry.path.split('/').slice(0, -1).join('/'));
+    pack.entry({ name: entry.path, uid: owner.uid, gid: owner.gid, mode: 0o644 }, await entry.buffer());
+  }
+  pack.finalize();
+
+  // Docker's archive API extracts into an existing directory rather than
+  // creating one, so the wipe has to leave an empty, correctly-owned folder
+  // behind, not none - a root-owned one would break the image's next boot
+  // the same way a root-owned file would.
+  const world = worldDirOf(server);
+  const wpath = `/data/${world.replace(/'/g, '')}`;
+  await runHelper(server.volume_name, `rm -rf '${wpath}' && mkdir -p '${wpath}' && chown ${owner.uid}:${owner.gid} '${wpath}'`);
+  await putArchiveStream(server.container_name, `/data/${world}`, pack);
+  audit(actor, server.id, 'world.upload', `${files.length} file(s)`);
+
+  if (seed) await updateServer(server.id, { seed }, actor);
+  if (wasRunning) await startServer(server.id, actor);
+  return { uploaded: true, files: files.length, restarted: wasRunning };
+}
+
 /** A tar stream of the snapshot's contents, whichever engine produced it. */
 export async function backupTarStream(b) {
   if (b.engine === 'restic') {
@@ -144,10 +213,23 @@ export async function backupTarStream(b) {
   return fs.createReadStream(backupPath(b)).pipe(zlib.createGunzip());
 }
 
+/**
+ * Unlike Docker's archive API, restic's dump keeps the snapshot's own full
+ * original path on every entry rather than wrapping just one level, so
+ * "world only" backups come back as data/<world>/... and "everything" ones
+ * as data/.... This strips exactly that many segments, so a zip downloaded
+ * here has the same bare-contents layout worldDownloadStream() produces -
+ * interchangeable with it, including for worldUpload().
+ */
+function restoreZipStrip(b) {
+  if (b.engine !== 'restic') return 0;
+  return scopeOf(b) === 'all' ? 1 : 2;
+}
+
 export async function streamAsZip(b, res) {
   const zip = archiver('zip', { zlib: { level: 6 } });
   zip.pipe(res);
-  await pipeTarIntoZip(await backupTarStream(b), zip);
+  await pipeTarIntoZip(await backupTarStream(b), zip, restoreZipStrip(b));
   await zip.finalize();
 }
 

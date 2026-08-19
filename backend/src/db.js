@@ -57,6 +57,18 @@ CREATE TABLE IF NOT EXISTS audit_log (
   detail     TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_audit_at ON audit_log(at DESC);
+
+-- Resource samples for the CPU/memory graphs. Written every few seconds while
+-- a server is running, pruned back to a day, so a graph survives a manager
+-- restart instead of resetting to nothing.
+CREATE TABLE IF NOT EXISTS stats_history (
+  server_id   TEXT NOT NULL,
+  at          INTEGER NOT NULL,
+  cpu_percent REAL NOT NULL,
+  mem_used    INTEGER NOT NULL,
+  mem_limit   INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_stats_history_server_at ON stats_history(server_id, at);
 `);
 
 db.exec('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)');

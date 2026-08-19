@@ -6,7 +6,6 @@ const SYSTEM = [
   ['/network', 'Network'],
   ['/backups', 'Backups'],
   ['/activity', 'Activity'],
-  ['/settings', 'Settings'],
 ];
 
 /**

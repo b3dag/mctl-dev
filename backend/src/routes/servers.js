@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db, getServer, listServers, audit } from '../db.js';
 import { ENV_CATALOG, SERVER_TYPES } from '../envcatalog.js';
-import { routerAddress, directAddress } from '../settings.js';
+import { routerAddress, directAddress, lanAddress } from '../settings.js';
 import {
   createServer,
   startServer,
@@ -12,10 +12,9 @@ import {
   deleteServer,
   refresh,
   refreshAll,
-  stateOf,
-  allStates,
-  httpError,
 } from '../servers.js';
+import { stateOf, allStates } from '../state.js';
+import { httpError } from '../errors.js';
 import { rconCommand, playerList } from '../rcon.js';
 import { statsHistory, currentStats, diskUsage } from '../monitor.js';
 import { containerState } from '../docker.js';
@@ -40,6 +39,7 @@ const shape = (s) => ({
   hostPort: s.host_port || null,
   routerAddress: routerAddress(s),
   directAddress: directAddress(s),
+  lanAddress: lanAddress(s),
   container: s.container_name,
   type: s.type,
   version: s.version,
@@ -182,8 +182,10 @@ router.get('/:id/players', loadServer, async (req, res, next) => {
 // --- whitelist, operators and bans ------------------------------------------
 
 /**
- * All of these apply live over RCON when the server is up, and are written
- * straight into the JSON when it is not, so nothing here needs a restart.
+ * The whitelist is always written to its file, then reloaded live if the
+ * server happens to be running. Operators and bans have no such reload
+ * command in vanilla, so they only ever apply over RCON and need the server
+ * up; there is no file equivalent for those.
  */
 router.get('/:id/players/lists', loadServer, async (req, res, next) => {
   try {
@@ -246,8 +248,7 @@ router.put('/:id/whitelist/enabled', loadServer, async (req, res, next) => {
 router.post('/:id/ops', loadServer, async (req, res, next) => {
   try {
     const name = lists.validName(req.body?.player);
-    const level = req.body?.level === undefined ? undefined : Math.min(4, Math.max(1, Number(req.body.level)));
-    const out = await lists.addOp(req.server, name, level, req.user);
+    const out = await lists.addOp(req.server, name, req.user);
     record(req, 'op.add', `${name} via ${out.via}`);
     res.json(out);
   } catch (e) {
@@ -314,11 +315,12 @@ router.delete('/:id/ban-ips/:ip', loadServer, async (req, res, next) => {
 
 router.get('/:id/stats', loadServer, async (req, res, next) => {
   try {
+    const minutes = Math.min(Math.max(Number(req.query.minutes) || 10, 1), 24 * 60);
     const [current, disk] = await Promise.all([
       currentStats(req.server).catch(() => null),
       req.query.disk === 'true' ? diskUsage(req.server).catch(() => null) : Promise.resolve(undefined),
     ]);
-    res.json({ current, history: statsHistory(req.server.id), disk });
+    res.json({ current, history: statsHistory(req.server.id, minutes * 60000), disk });
   } catch (e) {
     next(e);
   }

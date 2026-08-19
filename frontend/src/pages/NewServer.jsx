@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAsync } from '../ui.jsx';
 
@@ -59,7 +59,6 @@ export default function NewServer({ onCreated }) {
           DIFFICULTY: form.difficulty,
           MODE: form.mode,
           MAX_PLAYERS: form.maxPlayers,
-          MEMORY: form.memory,
         },
       });
       onCreated?.();
@@ -71,7 +70,7 @@ export default function NewServer({ onCreated }) {
     <form className="stack" onSubmit={submit}>
       <div className="row between">
         <h2>New server</h2>
-        <Link to="/"><button type="button" className="ghost">Cancel</button></Link>
+        <button type="button" className="ghost" onClick={() => nav('/')}>Cancel</button>
       </div>
 
       <div className="card">
@@ -103,9 +102,14 @@ export default function NewServer({ onCreated }) {
             placeholder="none"
           />
           <div className="hint">
-            {form.hostPort
-              ? <>Also reachable at <code className="mono">{me?.publicHost || 'your-host'}:{form.hostPort}</code>, no DNS needed.</>
-              : <>Leave empty to use the hostname above. Set a port to publish this server directly as well - the simplest option if you don't want to configure DNS.</>}
+            {form.hostPort ? (
+              <>
+                Also reachable at <code className="mono">{me?.publicHost || 'your-host'}:{form.hostPort}</code>, no DNS needed.
+                {me?.lanHost && <> Players on the same network can use <code className="mono">{me.lanHost}:{form.hostPort}</code> instead.</>}
+              </>
+            ) : (
+              <>Leave empty to use the hostname above. Set a port to publish this server directly as well - the simplest option if you don't want to configure DNS.</>
+            )}
           </div>
         </div>
 

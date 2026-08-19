@@ -57,7 +57,7 @@ export default function ServerLayout({ states = {}, onChange }) {
       <div className="page-head">
         <div style={{ minWidth: 0 }}>
           <h2>{server.name}</h2>
-          <div className="row small muted" style={{ gap: 10, marginTop: 2 }}>
+          <div className="row wrap small muted" style={{ gap: 10, marginTop: 2 }}>
             <span className="row" style={{ gap: 6 }}>
               <StatusDot state={state} />
               {PHASE_LABEL[state.phase] || 'Unknown'}

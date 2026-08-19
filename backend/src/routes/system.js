@@ -2,10 +2,11 @@ import { Router } from 'express';
 import { config } from '../config.js';
 import { docker } from '../docker.js';
 import { currentRoutes, routerStatus, syncRoutes, buildMappings } from '../router.js';
-import { allStates, refreshAll, stateOf, migrateHostnames } from '../servers.js';
+import { refreshAll, migrateHostnames } from '../servers.js';
+import { allStates, stateOf } from '../state.js';
 import { db, listServers } from '../db.js';
 import { inspectSafe } from '../docker.js';
-import { getSettings, saveSettings, getDomain, getPublicHost, routerAddress, directAddress } from '../settings.js';
+import { getSettings, saveSettings, getDomain, getPublicHost, routerAddress, directAddress, lanAddress } from '../settings.js';
 import * as backups from '../backups.js';
 
 export const router = Router();
@@ -15,6 +16,7 @@ router.get('/me', (req, res) => {
     email: req.user,
     domain: getDomain(),
     publicHost: getPublicHost(),
+    lanHost: getSettings().detectedLanIp,
     publicMcPort: config.publicMcPort,
   });
 });
@@ -64,6 +66,7 @@ router.get('/network', async (_req, res, next) => {
           autostartOnJoin: !!s.autostart_on_join,
           routerAddress: routerAddress(s),
           directAddress: directAddress(s),
+          lanAddress: lanAddress(s),
         };
       })
     );
@@ -79,6 +82,7 @@ router.get('/network', async (_req, res, next) => {
 
     res.json({
       publicHost: getPublicHost(),
+      lanHost: getSettings().detectedLanIp,
       sharedPort: config.publicMcPort,
       servers: entries,
       conflicts: Object.entries(duplicates)

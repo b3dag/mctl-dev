@@ -1,16 +1,21 @@
 :root {
-  --bg: #101215;
-  --panel: #16181c;
-  --panel-2: #1d2025;
-  --line: #2a2e34;
-  --line-soft: #212428;
-  --text: #e3e5e8;
+  --bg: #08090a;
+  --panel: #0d0e10;
+  --panel-2: #16181b;
+  --line: #3d424a;
+  --line-soft: #32363d;
+  --text: #e7e9ec;
   --muted: #8a9098;
-  /* Colour is reserved for status. Nothing else is tinted. */
+  --mono: ui-monospace, "Cascadia Mono", "Cascadia Code", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  /* Status stays status: green/amber/red never mean anything but server state. */
   --green: #4f9a5c;
   --amber: #b3873c;
   --red: #c25a52;
-  --radius: 3px;
+  /* Accent is a separate signal: this is actionable, not this is healthy. */
+  --accent: #4f8fd6;
+  --accent-strong: #6fa6e3;
+  --accent-ink: #04101d;
+  --radius: 0;
   --sidebar: 224px;
   color-scheme: dark;
 }
@@ -22,15 +27,17 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font: 14px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font: 13.5px/1.55 var(--mono);
   -webkit-font-smoothing: antialiased;
 }
 
-a { color: var(--text); text-decoration: none; }
+a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
-code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.92em; }
+code, pre, .mono { font-family: var(--mono); font-size: 0.95em; }
 h2 { font-size: 16px; font-weight: 600; margin: 0; }
-h3 { font-size: 13.5px; font-weight: 600; margin: 0; }
+h3 { font-size: 13px; font-weight: 600; margin: 0; text-transform: uppercase; letter-spacing: .04em; }
+
+input[type="checkbox"], input[type="radio"] { accent-color: var(--accent); }
 
 /* --- shell ---------------------------------------------------------------- */
 
@@ -49,23 +56,24 @@ h3 { font-size: 13.5px; font-weight: 600; margin: 0; }
 }
 
 .sidebar-head { padding: 13px 14px; border-bottom: 1px solid var(--line-soft); }
-.brand { font-weight: 600; font-size: 14px; color: var(--text); }
+.brand { font-weight: 700; font-size: 14px; color: var(--text); }
 .brand:hover { text-decoration: none; }
 
 .nav-group { padding: 12px 8px 4px; }
 .nav-label {
-  font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em;
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em;
   color: var(--muted); padding: 0 6px 6px; display: flex; justify-content: space-between; align-items: center;
 }
 
 .nav-item {
   display: flex; align-items: center; gap: 8px;
   padding: 5px 8px; border-radius: var(--radius);
+  border-left: 2px solid transparent;
   color: var(--text); font-size: 13px; line-height: 1.35;
 }
 .nav-item:hover { background: var(--panel-2); text-decoration: none; }
-.nav-item.active { background: var(--panel-2); }
-.nav-item.active .nav-name { font-weight: 600; }
+.nav-item.active { background: var(--panel-2); border-left-color: var(--accent); }
+.nav-item.active .nav-name { font-weight: 700; }
 .nav-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav-meta { margin-left: auto; color: var(--muted); font-size: 11.5px; flex: none; }
 .nav-empty { padding: 3px 8px 8px; color: var(--muted); font-size: 12.5px; }
@@ -82,6 +90,10 @@ h3 { font-size: 13.5px; font-weight: 600; margin: 0; }
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 13px;
+  /* A long unbroken token (an audit detail, a UUID) can still make a table
+     wider than the card in table-layout: auto; scroll inside the border
+     rather than let the table or its row lines spill past it. */
+  overflow-x: auto;
 }
 .card-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
 
@@ -94,6 +106,12 @@ h3 { font-size: 13.5px; font-weight: 600; margin: 0; }
 .stack { display: flex; flex-direction: column; gap: 14px; }
 .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
 
+/*
+ * Plain buttons borrow the reference console's invert-on-hover: a bordered
+ * box that flips to solid text-on-bg, no colour of its own. .primary and
+ * .danger are the two places colour actually lives, since those are the
+ * buttons worth noticing at a glance across a page of otherwise-neutral ones.
+ */
 button, .btn {
   appearance: none;
   border: 1px solid var(--line);
@@ -110,15 +128,25 @@ button, .btn {
   align-items: center;
   justify-content: center;
 }
-button:hover:not(:disabled), .btn:hover { border-color: #3a3f47; text-decoration: none; }
+button:hover:not(:disabled), .btn:hover { background: var(--text); color: var(--bg); border-color: var(--text); text-decoration: none; }
+button:focus-visible, .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 button:disabled { opacity: 0.4; cursor: not-allowed; }
-button.primary { border-color: #454b54; font-weight: 600; }
-button.danger { color: var(--red); }
-button.ghost { background: transparent; border-color: transparent; }
-button.ghost:hover:not(:disabled) { background: var(--panel-2); border-color: transparent; }
+
+button.primary {
+  background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700;
+}
+button.primary:hover:not(:disabled) { background: var(--accent-strong); border-color: var(--accent-strong); color: var(--accent-ink); }
+
+button.danger { background: var(--red); color: #200807; border-color: var(--red); font-weight: 700; }
+button.danger:hover:not(:disabled) { background: #d16f66; border-color: #d16f66; color: #200807; }
+
+button.ghost { background: transparent; border-color: transparent; color: var(--text); }
+button.ghost:hover:not(:disabled) { background: var(--panel-2); color: var(--text); border-color: transparent; }
+
 button.sm { padding: 2px 7px; min-height: 25px; font-size: 12px; }
-button.link { background: none; border: none; padding: 0; min-height: 0; color: var(--text); }
-button.link:hover { text-decoration: underline; border: none; }
+
+button.link { background: none; border: none; padding: 0; min-height: 0; color: var(--accent); }
+button.link:hover { background: none; color: var(--accent-strong); text-decoration: underline; border: none; }
 
 input, select, textarea {
   width: 100%;
@@ -131,7 +159,7 @@ input, select, textarea {
   font-size: 13px;
   min-height: 30px;
 }
-input:focus, select:focus, textarea:focus { outline: none; border-color: #4a505a; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--accent); border-width: 2px; padding: 5px 7px; }
 textarea { min-height: 320px; resize: vertical; }
 label { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 4px; }
 .field { margin-bottom: 12px; }
@@ -148,7 +176,7 @@ label { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 4
 .dot { width: 7px; height: 7px; border-radius: 50%; background: #565c66; flex: none; }
 .dot.ready { background: var(--green); }
 .dot.starting, .dot.stopping { background: var(--amber); }
-.dot.unhealthy, .dot.missing { background: var(--red); }
+.dot.unhealthy, .dot.missing, .dot.crashed { background: var(--red); }
 
 .tabs { display: flex; gap: 2px; overflow-x: auto; border-bottom: 1px solid var(--line); scrollbar-width: none; }
 .tabs::-webkit-scrollbar { display: none; }
@@ -157,21 +185,50 @@ label { display: block; font-size: 12.5px; color: var(--muted); margin-bottom: 4
   white-space: nowrap; font-size: 13px;
 }
 .tabs a:hover { color: var(--text); text-decoration: none; }
-.tabs a.active { color: var(--text); border-bottom-color: var(--muted); }
+.tabs a.active { color: var(--text); font-weight: 700; border-bottom-color: var(--accent); }
 
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
-th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
-th { color: var(--muted); font-weight: 500; font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; }
+th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line-soft); vertical-align: top; overflow-wrap: anywhere; }
+th { color: var(--muted); font-weight: 600; font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; }
 tr:last-child td { border-bottom: none; }
 
+/*
+ * A grid-based row list, used where a plain <table> kept losing the fight
+ * between auto column widths, a flex action cell, and long unbreakable
+ * tokens (an address, a UUID) in a monospace font: the divider is one
+ * border on the row itself rather than four cell borders that have to
+ * agree, so it can never end early or drift out of alignment with its
+ * neighbours no matter what a cell's content does.
+ */
+.rowlist { display: flex; flex-direction: column; }
+.rowlist-head, .rowlist-row {
+  display: grid;
+  grid-template-columns: var(--cols, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+}
+.rowlist-head {
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--muted); font-weight: 600;
+  border-bottom: 1px solid var(--line);
+}
+.rowlist-row { border-bottom: 1px solid var(--line-soft); font-size: 13px; }
+.rowlist-row:last-child { border-bottom: none; }
+.rowlist-cell { min-width: 0; overflow-wrap: anywhere; }
+.rowlist-cell.end { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 6px; }
+
+.rowlist.servers { --cols: 1fr 130px 1fr 220px; }
+.rowlist.activity { --cols: 92px 150px 1fr; }
+
 .console {
-  background: #0b0d10;
+  background: #050607;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 9px 11px;
   height: min(58vh, 520px);
   overflow-y: auto;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--mono);
   font-size: 12px;
   line-height: 1.5;
   white-space: pre-wrap;
@@ -179,7 +236,7 @@ tr:last-child td { border-bottom: none; }
 }
 .console .warn { color: var(--amber); }
 .console .err { color: var(--red); }
-.console .echo { color: var(--muted); font-weight: 600; }
+.console .echo { color: var(--accent); font-weight: 600; }
 .console .sys { color: var(--muted); }
 
 .toast {
@@ -205,9 +262,42 @@ tr:last-child td { border-bottom: none; }
 .err-text { color: var(--red); font-size: 13px; }
 .spark { width: 100%; height: 64px; display: block; }
 
+button.chart-trigger {
+  all: unset;
+  cursor: pointer;
+  display: block;
+  width: 100%;
+}
+button.chart-trigger:hover .spark-line { stroke: var(--accent); }
+button.chart-trigger:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.chart-full {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  grid-template-rows: auto auto;
+  gap: 3px 8px;
+}
+.chart-full .chart-yaxis {
+  grid-row: 1; grid-column: 1;
+  display: flex; flex-direction: column; justify-content: space-between;
+  font-size: 10.5px; color: var(--muted); text-align: right;
+}
+.chart-full .chart-body { grid-row: 1; grid-column: 2; height: 140px; }
+.chart-full .chart-body .spark { height: 100%; }
+.chart-full .chart-xaxis {
+  grid-row: 2; grid-column: 2;
+  display: flex; justify-content: space-between;
+  font-size: 10.5px; color: var(--muted);
+}
+.chart-grid { stroke: var(--line-soft); stroke-width: 1; vector-effect: non-scaling-stroke; }
+
 .kv { display: grid; grid-template-columns: max-content 1fr; gap: 5px 16px; font-size: 13px; margin: 0; }
 .kv dt { color: var(--muted); }
 .kv dd { margin: 0; }
+
+details.card > summary { cursor: pointer; font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; }
+details.card[open] > summary { margin-bottom: 10px; }
+details.card > summary:hover { color: var(--accent); }
 
 /* --- new shell bits ------------------------------------------------------- */
 
@@ -220,11 +310,12 @@ tr:last-child td { border-bottom: none; }
 .actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 td.actions { justify-content: flex-end; }
 
-.strong { font-weight: 600; }
+.strong { font-weight: 700; }
 
 .nav-label-link { color: var(--muted); }
 .nav-label-link:hover { color: var(--text); text-decoration: none; }
 .nav-label a { color: var(--muted); }
+.nav-label a:hover { color: var(--accent); text-decoration: none; }
 
 section.card + section.card { margin-top: 0; }
 
@@ -236,10 +327,11 @@ section.card + section.card { margin-top: 0; }
   position: sticky; bottom: 0; z-index: 5;
 }
 
-.danger-zone { border-color: #3a2a2c; }
+.danger-zone { border-color: #4a2c2a; }
 
-.spark-fill { fill: var(--muted); opacity: 0.12; }
-.spark-line { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.spark-fill { fill: var(--accent); opacity: 0.14; }
+.spark-line { fill: none; stroke: var(--accent); stroke-width: 1.5; }
+.chart-off { fill: var(--red); opacity: 0.14; }
 
 /* --- mobile --------------------------------------------------------------- */
 
@@ -269,4 +361,8 @@ section.card + section.card { margin-top: 0; }
 
   th:nth-child(n+4), td:nth-child(n+4) { display: none; }
   .grid { grid-template-columns: 1fr; }
+
+  .rowlist-head { display: none; }
+  .rowlist-row { grid-template-columns: 1fr; gap: 4px; padding: 10px; }
+  .rowlist-cell.end { justify-content: flex-start; }
 }

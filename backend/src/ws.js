@@ -2,7 +2,7 @@ import { WebSocketServer } from 'ws';
 import { authorizeUpgrade } from './auth.js';
 import { getServer, audit } from './db.js';
 import { followLogs, containerState } from './docker.js';
-import { events, allStates, stateOf } from './servers.js';
+import { events, allStates, stateOf } from './state.js';
 import { rconCommand } from './rcon.js';
 import { stripFormatting } from './text.js';
 
@@ -74,23 +74,49 @@ async function handleConsole(ws, user, id) {
   let logStream = null;
   let closed = false;
 
-  const attach = async () => {
-    const st = await containerState(server.container_name);
-    if (!st.exists) return send('info', { message: 'container does not exist yet' });
-    if (!st.running) return send('info', { message: 'server is stopped - start it to see live output' });
-    try {
-      logStream = await followLogs(server.container_name, { tail: 300 });
+  /** Pipes a docker log stream's chunks out as individual `line` messages. */
+  const pipeLines = (stream) =>
+    new Promise((resolve) => {
       let carry = '';
-      logStream.on('data', (chunk) => {
+      stream.on('data', (chunk) => {
         const text = carry + chunk.toString('utf8');
         const lines = text.split('\n');
         carry = lines.pop() ?? '';
         for (const line of lines) send('line', { line: stripFormatting(line).replace(/\r$/, '') });
       });
-      logStream.on('end', () => {
-        if (!closed) send('info', { message: 'log stream ended' });
-      });
+      stream.on('end', resolve);
+      stream.on('error', resolve);
+    });
+
+  /** Explains why nothing is live, in a way that actually says what happened. */
+  const stoppedMessage = () => {
+    const s = stateOf(id);
+    return s.phase === 'crashed'
+      ? `the server exited with an error (code ${s.exitCode}). The log above ends where it happened.`
+      : 'the server is stopped - start it to see live output';
+  };
+
+  const attach = async () => {
+    const st = await containerState(server.container_name);
+    if (!st.exists) return send('info', { message: 'container does not exist yet' });
+    if (!st.running) {
+      // A crash trace (or whatever it last printed) is still on disk even
+      // though the container isn't running, so show that before explaining
+      // why nothing new is coming - otherwise the one useful thing left
+      // becomes invisible right when it matters most.
+      try {
+        await pipeLines(await followLogs(server.container_name, { tail: 200 }));
+      } catch {
+        /* nothing logged yet, not fatal */
+      }
+      return send('info', { message: stoppedMessage() });
+    }
+    try {
+      logStream = await followLogs(server.container_name, { tail: 300 });
       logStream.on('error', (e) => send('error', { message: e.message }));
+      pipeLines(logStream).then(() => {
+        if (!closed && logStream) send('info', { message: 'log stream ended' });
+      });
     } catch (e) {
       send('error', { message: e.message });
     }
@@ -106,6 +132,7 @@ async function handleConsole(ws, user, id) {
     if (!state.running && logStream) {
       logStream.destroy?.();
       logStream = null;
+      send('info', { message: stoppedMessage() });
     }
   };
   events.on('state', onState);

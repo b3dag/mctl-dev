@@ -2,8 +2,12 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useAsync, useToast } from '../ui.jsx';
 
-/** A name field with an add button, used by each of the lists below. */
-function AddRow({ placeholder, onAdd, busy, withReason, extra }) {
+/**
+ * A name field with a save button, used by each of the lists below.
+ * `disabled` gates it on the server being live, for the lists (ops, bans)
+ * that only apply over RCON and have no file equivalent.
+ */
+function AddRow({ placeholder, onAdd, busy, disabled, disabledTitle, withReason, extra }) {
   const [value, setValue] = useState('');
   const [reason, setReason] = useState('');
 
@@ -36,7 +40,9 @@ function AddRow({ placeholder, onAdd, busy, withReason, extra }) {
         />
       )}
       {extra}
-      <button className="primary" disabled={busy || !value.trim()}>Add</button>
+      <button className="primary" disabled={busy || !value.trim() || disabled} title={disabled ? disabledTitle : undefined}>
+        Add
+      </button>
     </form>
   );
 }
@@ -70,7 +76,6 @@ export default function Players({ server, state }) {
   const [lists, setLists] = useState(null);
   const [online, setOnline] = useState(null);
   const [error, setError] = useState(null);
-  const [opLevel, setOpLevel] = useState('4');
   const { busy, run } = useAsync();
   const toast = useToast();
 
@@ -92,18 +97,26 @@ export default function Players({ server, state }) {
   if (error) return <div className="card err-text">{error}</div>;
   if (!lists) return <div className="empty">Loading</div>;
 
-  const act = (fn, msg) => run(async () => { const r = await fn(); load(); if (r?.via === 'file') toast(r.output); }, msg);
+  // The API's own output is usually more informative than a generic label
+  // (it says whether the whitelist reloaded live or needs a restart, or
+  // echoes the RCON reply), so prefer it; fall back to the generic message
+  // only if a call somehow returns without one.
+  const act = (fn, msg) =>
+    run(async () => {
+      const r = await fn();
+      load();
+      return r;
+    }).then((r) => r && toast(r.output || msg));
   const live = lists.live;
+  const notLive = 'The server is not running.';
 
   return (
     <div className="stack">
-      {!live && (
-        <div className="card hint" style={{ marginTop: 0 }}>
-The server is not running, so everything here is written straight into its files and
-          applies when it starts. Adding someone who has never played here needs a Mojang lookup
-          for their UUID.
-        </div>
-      )}
+      <div className="card hint" style={{ marginTop: 0 }}>
+        The whitelist is always saved to its file and reloaded into a running server immediately, no
+        restart needed. Operators and bans apply live over RCON and need the server running, since
+        vanilla has no way to reload those from disk.
+      </div>
 
       <ListCard
         title="Online now"
@@ -175,7 +188,7 @@ The server is not running, so everything here is written straight into its files
             </td>
             <td>{p.level}</td>
             <td className="actions">
-              <button className="sm" disabled={busy} onClick={() => act(() => api.removeOp(server.id, p.name), `${p.name} deopped`)}>Remove</button>
+              <button className="sm" disabled={busy || !live} title={live ? undefined : notLive} onClick={() => act(() => api.removeOp(server.id, p.name), `${p.name} deopped`)}>Remove</button>
             </td>
           </tr>
         ))}
@@ -183,22 +196,14 @@ The server is not running, so everything here is written straight into its files
         <AddRow
           placeholder="Minecraft name"
           busy={busy}
-          extra={
-            <select style={{ width: 130 }} value={opLevel} onChange={(e) => setOpLevel(e.target.value)}>
-              <option value="1">1 bypass spawn</option>
-              <option value="2">2 commands</option>
-              <option value="3">3 moderation</option>
-              <option value="4">4 full</option>
-            </select>
-          }
-          onAdd={(name) => act(() => api.addOp(server.id, name, Number(opLevel)), `${name} opped`)}
+          disabled={!live}
+          disabledTitle={notLive}
+          onAdd={(name) => act(() => api.addOp(server.id, name), `${name} opped`)}
         />
-        {live && (
-          <div className="hint">
-            While the server is running it assigns the level from its own
-            <code> op-permission-level</code>; the choice above applies when it is stopped.
-          </div>
-        )}
+        <div className="hint">
+          A new operator gets this server's own <code>op-permission-level</code>; vanilla has no way to
+          set a specific level over RCON.
+        </div>
       </ListCard>
 
       <ListCard
@@ -213,7 +218,7 @@ The server is not running, so everything here is written straight into its files
             </td>
             <td className="small">{p.reason}</td>
             <td className="actions">
-              <button className="sm" disabled={busy} onClick={() => act(() => api.pardonPlayer(server.id, p.name), `${p.name} unbanned`)}>Unban</button>
+              <button className="sm" disabled={busy || !live} title={live ? undefined : notLive} onClick={() => act(() => api.pardonPlayer(server.id, p.name), `${p.name} unbanned`)}>Unban</button>
             </td>
           </tr>
         ))}
@@ -222,6 +227,8 @@ The server is not running, so everything here is written straight into its files
           placeholder="Minecraft name"
           withReason
           busy={busy}
+          disabled={!live}
+          disabledTitle={notLive}
           onAdd={(name, reason) => act(() => api.banPlayer(server.id, name, reason), `${name} banned`)}
         />
       </ListCard>
@@ -238,7 +245,7 @@ The server is not running, so everything here is written straight into its files
             </td>
             <td className="small">{p.reason}</td>
             <td className="actions">
-              <button className="sm" disabled={busy} onClick={() => act(() => api.pardonIp(server.id, p.ip), `${p.ip} unbanned`)}>Unban</button>
+              <button className="sm" disabled={busy || !live} title={live ? undefined : notLive} onClick={() => act(() => api.pardonIp(server.id, p.ip), `${p.ip} unbanned`)}>Unban</button>
             </td>
           </tr>
         ))}
@@ -247,6 +254,8 @@ The server is not running, so everything here is written straight into its files
           placeholder="203.0.113.4"
           withReason
           busy={busy}
+          disabled={!live}
+          disabledTitle={notLive}
           onAdd={(ip, reason) => act(() => api.banIp(server.id, ip, reason), `${ip} banned`)}
         />
       </ListCard>

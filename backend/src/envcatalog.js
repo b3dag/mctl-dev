@@ -49,7 +49,6 @@ export const ENV_CATALOG = [
   {
     group: 'Performance',
     vars: [
-      { key: 'MEMORY', label: 'Heap size', type: 'text', default: '2G', hint: 'e.g. 2G, 4096M' },
       { key: 'USE_AIKAR_FLAGS', label: 'Aikar JVM flags', type: 'bool', default: 'true' },
       { key: 'JVM_XX_OPTS', label: 'Extra JVM -XX options', type: 'text' },
     ],
@@ -57,9 +56,10 @@ export const ENV_CATALOG = [
 ];
 
 /**
- * OPS and WHITELIST are deliberately absent: the Players tab manages both
- * lists live, and having a second comma-separated copy in the environment
- * would fight with it every time the container was recreated.
+ * OPS, WHITELIST and MEMORY are deliberately absent: the Players tab owns the
+ * first two live, and the dedicated Memory field on Settings owns the third.
+ * Any of them living a second life in the environment too would just be a
+ * stale value away from quietly overriding the real one on the next recreate.
  */
 export const SERVER_TYPES = [
   { value: 'VANILLA', label: 'Vanilla', mods: null },
@@ -88,6 +88,13 @@ export const RESERVED_ENV = new Set([
   'SERVER_PORT',
   'UID',
   'GID',
+  // The Players tab owns these lists live. Letting one through here means the
+  // itzg image re-applies its own copy on every recreate, resolving UUIDs its
+  // own way (offline UUIDs when ONLINE_MODE=false) - which then collides with
+  // whatever UUID mctl already put in the file, as two entries for one name.
+  'WHITELIST',
+  'OPS',
+  'MEMORY',
 ]);
 
 export function sanitizeEnv(input = {}) {

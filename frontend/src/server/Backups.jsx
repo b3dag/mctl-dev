@@ -15,6 +15,9 @@ export default function Backups({ server }) {
   const [remove, setRemove] = useState(null);
   const [cron, setCron] = useState('');
   const [keep, setKeep] = useState(7);
+  const [uploadFile, setUploadFile] = useState(null);
+  const [uploadSeed, setUploadSeed] = useState('');
+  const [confirmUpload, setConfirmUpload] = useState(false);
   const { busy, run } = useAsync();
 
   const load = useCallback(() => {
@@ -105,6 +108,39 @@ export default function Backups({ server }) {
       </div>
 
       <div className="card stack">
+        <strong>Move a world</strong>
+        <div className="small muted">
+          Download the current world to move it somewhere else, or replace this server's world with one
+          downloaded from another. Independent of the snapshots below, neither side needs a backup first.
+        </div>
+        <div className="row wrap" style={{ gap: 8 }}>
+          <a className="btn" href={api.worldDownloadUrl(server.id)} download>Download world (zip)</a>
+        </div>
+        <div className="row wrap" style={{ gap: 10, alignItems: 'flex-end' }}>
+          <div className="field grow" style={{ minWidth: 200, marginBottom: 0 }}>
+            <label>World zip</label>
+            <input
+              type="file"
+              accept=".zip"
+              onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+            />
+          </div>
+          <div className="field" style={{ width: 160, marginBottom: 0 }}>
+            <label>Seed (optional)</label>
+            <input
+              className="mono"
+              value={uploadSeed}
+              onChange={(e) => setUploadSeed(e.target.value)}
+              placeholder="leave blank to keep"
+            />
+          </div>
+          <button className="danger" disabled={!uploadFile || busy} onClick={() => setConfirmUpload(true)}>
+            Replace world
+          </button>
+        </div>
+      </div>
+
+      <div className="card stack">
         <strong>Schedule</strong>
         <div className="row wrap" style={{ gap: 10 }}>
           <div className="grow" style={{ minWidth: 170 }}>
@@ -144,7 +180,7 @@ export default function Backups({ server }) {
               <th>Snapshot</th>
               <th style={{ width: 130 }}>Added</th>
               <th style={{ width: 110 }}>Created</th>
-              <th style={{ width: 230 }}></th>
+              <th style={{ width: 220 }}></th>
             </tr>
           </thead>
           <tbody>
@@ -156,7 +192,7 @@ export default function Backups({ server }) {
                   </span>{' '}
                   <span className="pill">{b.kind}</span>
                   {b.engine === 'tar' && <span className="pill">legacy tar</span>}
-                  {b.scope === 'all' && <span className="pill">all of /data</span>}
+                  <span className="pill">{b.scope === 'all' ? 'all of /data' : 'world only'}</span>
                 </td>
                 <td className="muted small">
                   {bytes(b.size)}
@@ -207,6 +243,27 @@ export default function Backups({ server }) {
               setRemove(null);
               load();
             }, 'Deleted')
+          }
+        />
+      )}
+
+      {confirmUpload && (
+        <Confirm
+          title="Replace this server's world?"
+          message={`The server will be stopped, its current "${data.worldDir}" folder replaced with the uploaded zip, and started again if it was running. This cannot be undone.`}
+          confirmWord={server.slug}
+          onClose={() => setConfirmUpload(false)}
+          onConfirm={() =>
+            run(async () => {
+              const fd = new FormData();
+              fd.append('file', uploadFile);
+              if (uploadSeed.trim()) fd.append('seed', uploadSeed.trim());
+              await api.uploadWorld(server.id, server.slug, fd);
+              setConfirmUpload(false);
+              setUploadFile(null);
+              setUploadSeed('');
+              load();
+            }, 'World replaced')
           }
         />
       )}

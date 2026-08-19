@@ -54,8 +54,10 @@ services:
       # Infrastructure wiring
       DOMAIN: ${DOMAIN:-mc.localhost}
       # Where players reach directly published servers, and which host port
-      # mc-router already occupies.
-      PUBLIC_HOST: ${PUBLIC_HOST:-${DOMAIN:-mc.localhost}}
+      # mc-router already occupies. Left unset rather than falling back to
+      # DOMAIN here, since the manager auto-detects a real IP on its own and
+      # the domain is usually Cloudflare-proxied, not reachable on this port.
+      PUBLIC_HOST: ${PUBLIC_HOST:-}
       PUBLIC_MC_PORT: ${MC_PORT:-25565}
       MC_NETWORK: ${COMPOSE_PROJECT_NAME:-mctl}-net
       ROUTER_API: http://mc-router:8080

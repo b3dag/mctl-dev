@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import fs from 'node:fs';
+import busboy from 'busboy';
 import { loadServer } from './servers.js';
 import * as backups from '../backups.js';
-import { httpError } from '../servers.js';
+import { httpError } from '../errors.js';
 
 export const router = Router({ mergeParams: true });
 
@@ -104,4 +105,64 @@ router.delete('/:id/backups/:backupId', loadBackup, async (req, res, next) => {
   } catch (e) {
     next(e);
   }
+});
+
+/**
+ * Move a world by hand instead of through the shared backup repository: a
+ * plain zip out, a plain zip back in on whichever server it lands on next.
+ * Independent of the snapshot list above, so neither side needs a backup to
+ * already exist.
+ */
+router.get('/:id/world/download', async (req, res, next) => {
+  try {
+    res.setHeader('content-type', 'application/zip');
+    res.setHeader('content-disposition', `attachment; filename="${req.server.slug}-world.zip"`);
+    await backups.worldDownloadStream(req.server, res);
+  } catch (e) {
+    next(e);
+  }
+});
+
+router.post('/:id/world/upload', (req, res, next) => {
+  const bb = busboy({ headers: req.headers, limits: { fileSize: 4 * 1024 * 1024 * 1024, files: 1 } });
+  let seed = '';
+  let buffer = null;
+  let failed = null;
+  const pending = [];
+
+  bb.on('field', (name, value) => {
+    if (name === 'seed') seed = value;
+  });
+  bb.on('file', (_field, stream, info) => {
+    const chunks = [];
+    stream.on('data', (d) => chunks.push(d));
+    pending.push(
+      new Promise((resolve) => {
+        stream.on('limit', () => {
+          failed ||= httpError(413, `${info.filename} exceeds the 4 GB upload limit`);
+          resolve();
+        });
+        stream.on('end', () => {
+          buffer = Buffer.concat(chunks);
+          resolve();
+        });
+      })
+    );
+  });
+
+  bb.on('error', (e) => next(e));
+  bb.on('close', async () => {
+    await Promise.all(pending);
+    if (failed) return next(failed);
+    if (!buffer) return next(httpError(400, 'no file uploaded'));
+    try {
+      if (String(req.query.confirm || '') !== req.server.slug)
+        throw httpError(400, `confirmation required: pass ?confirm=${req.server.slug}`);
+      res.json(await backups.worldUpload(req.server, buffer, { actor: req.user, seed: seed.trim() || undefined }));
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  req.pipe(bb);
 });

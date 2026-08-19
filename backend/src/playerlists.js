@@ -1,17 +1,24 @@
+import crypto from 'node:crypto';
 import { readFileFromContainer, writeFileToContainer, containerState, volumeOwner } from './docker.js';
 import { rconCommand } from './rcon.js';
-import { stateOf, httpError } from './servers.js';
+import { stateOf } from './state.js';
+import { httpError, sleep } from './errors.js';
 import { db } from './db.js';
 import { stripFormatting } from './text.js';
 
 /**
  * Whitelist, operators and bans.
  *
- * Minecraft keeps all four as JSON next to the world, and RCON edits them live.
- * So: read from the files, which works whether or not the server is running,
- * and write through RCON when it is, because that applies immediately and lets
- * the server own the file. Only when the server is stopped do we edit the JSON
- * ourselves, which is what makes it possible to prepare a whitelist in advance.
+ * Vanilla only gives the whitelist a way to reload itself from disk without a
+ * restart (`whitelist reload`), so it is the one list mctl edits as a file:
+ * write whitelist.json with our own UUID resolution, then ask a running
+ * server to reload it. That also sidesteps a real bug, where asking a running
+ * server to resolve a name itself queries Mojang even in offline mode and can
+ * land a UUID that never matches a connecting player.
+ *
+ * Ops and bans have no reload command, so a file write there would always
+ * need a restart to take effect anyway. There is nothing to gain by writing
+ * their files ourselves, so those go over RCON only and need the server up.
  */
 
 const FILES = {
@@ -40,6 +47,27 @@ const isLive = async (server) => {
   const st = await containerState(server.container_name);
   return st.running && stateOf(server.id).phase === 'ready';
 };
+
+/**
+ * Waits out a server that is mid-boot rather than racing it: the container is
+ * up, so it has already read these files once and will write its own copy
+ * back as soon as RCON comes up, and touching a file during that window looks
+ * like it worked and is then silently overwritten. Returns once the server
+ * has settled one way or the other, or gives up honestly after too long.
+ */
+async function awaitSettled(server, { waitMs = 120000 } = {}) {
+  const deadline = Date.now() + waitMs;
+  for (;;) {
+    const st = await containerState(server.container_name);
+    const phase = stateOf(server.id).phase;
+    if (!st.running) return { running: false, ready: false };
+    if (phase !== 'starting') return { running: true, ready: phase === 'ready' };
+    if (Date.now() >= deadline) {
+      throw httpError(409, 'the server is still starting. Try again once it is up.');
+    }
+    await sleep(1500);
+  }
+}
 
 async function readJson(server, file) {
   try {
@@ -110,10 +138,22 @@ export async function readLists(server) {
 }
 
 /**
- * Resolve a name to a UUID, needed only when editing the files directly. A
- * running server does this itself, so this is the offline path.
+ * Minecraft's own algorithm for players who are never authenticated against
+ * Mojang: UUID v3 of "OfflinePlayer:<name>". A server running ONLINE_MODE=false
+ * assigns connecting players this UUID, not their real Mojang one, so that is
+ * what has to end up in whitelist.json or the entry never matches.
  */
-async function lookupUuid(name) {
+function offlineUuid(name) {
+  const hash = Buffer.from(crypto.createHash('md5').update(`OfflinePlayer:${name}`).digest());
+  hash[6] = (hash[6] & 0x0f) | 0x30; // version 3
+  hash[8] = (hash[8] & 0x3f) | 0x80; // variant
+  const hex = hash.toString('hex');
+  return { name, uuid: `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}` };
+}
+
+/** Resolve a name to a UUID for the whitelist file, offline-aware. */
+async function lookupUuid(name, server) {
+  if (server?.env?.ONLINE_MODE === 'false') return offlineUuid(name);
   let res;
   let lastError;
   // Retried because this is a single outbound call on someone else's network,
@@ -146,58 +186,56 @@ async function lookupUuid(name) {
   };
 }
 
-const stamp = () => new Date().toISOString().replace('T', ' ').replace(/\.\d+Z$/, ' +0000');
+// --- whitelist: always a file write, reloaded live when possible -----------
 
 /**
- * Every mutation takes the same shape: if the server is up, let it do the work
- * over RCON; if not, edit the file so the change is waiting when it starts.
+ * Writes whitelist.json, then asks a running server to pick it up immediately
+ * with `whitelist reload`. If that fails (RCON drops mid-request, say) the
+ * file write itself already succeeded, so it is reported as taking effect on
+ * the next start rather than treated as an error.
  */
-async function mutate(server, { command, file, apply, actor }) {
-  if (await isLive(server)) {
-    const out = await rconCommand(server, command);
-    return { via: 'rcon', output: stripFormatting(out).trim() };
-  }
-  const list = await readJson(server, file);
+async function mutateWhitelist(server, apply) {
+  const { running } = await awaitSettled(server);
+  const list = await readJson(server, FILES.whitelist);
   const next = await apply(list);
-  await writeJson(server, file, next);
-  return { via: 'file', output: 'Applied to the file; it takes effect when the server starts.' };
+  await writeJson(server, FILES.whitelist, next);
+
+  if (running) {
+    try {
+      const out = await rconCommand(server, 'whitelist reload');
+      return { via: 'file', output: `Saved and reloaded live. ${stripFormatting(out).trim()}`.trim() };
+    } catch {
+      /* saved either way; just couldn't confirm the live reload */
+    }
+  }
+  return {
+    via: 'file',
+    output: running
+      ? 'Saved to the file. Restart the server for this to take effect.'
+      : 'Saved to the file. It takes effect the next time the server starts.',
+  };
 }
 
 export const addToWhitelist = (server, name, actor) =>
-  mutate(server, {
-    command: `whitelist add ${name}`,
-    file: FILES.whitelist,
-    actor,
-    apply: async (list) => {
-      if (list.some((e) => e.name?.toLowerCase() === name.toLowerCase())) return list;
-      const profile = await lookupUuid(name);
-      return [...list, profile];
-    },
+  mutateWhitelist(server, async (list) => {
+    if (list.some((e) => e.name?.toLowerCase() === name.toLowerCase())) return list;
+    const profile = await lookupUuid(name, server);
+    return [...list, profile];
   });
 
 export const removeFromWhitelist = (server, name, actor) =>
-  mutate(server, {
-    command: `whitelist remove ${name}`,
-    file: FILES.whitelist,
-    actor,
-    apply: async (list) => list.filter((e) => e.name?.toLowerCase() !== name.toLowerCase()),
-  });
+  mutateWhitelist(server, async (list) => list.filter((e) => e.name?.toLowerCase() !== name.toLowerCase()));
 
 /**
- * Enforcement lives in server.properties rather than a JSON list, so the
- * offline path edits that instead. The stored ENABLE_WHITELIST is kept in step
- * at the same time, because the image rewrites server.properties from the
- * environment whenever the container is recreated and would otherwise undo it.
- */
-/**
- * Enforcement lives in server.properties rather than a JSON list, so the
- * offline path edits that file instead.
+ * Enforcement lives in server.properties, which is only read at boot, so that
+ * file is always the source of truth here (and the stored ENABLE_WHITELIST is
+ * kept in step, since the image would otherwise undo this on the next
+ * recreate). `whitelist on`/`off` is applied on top when the server is up,
+ * since unlike a list edit that command is already instant and needs no
+ * reload.
  */
 export const setWhitelistEnabled = async (server, enabled) => {
-  if (await isLive(server)) {
-    const out = await rconCommand(server, `whitelist ${enabled ? 'on' : 'off'}`);
-    return { via: 'rcon', output: stripFormatting(out).trim() };
-  }
+  const { running } = await awaitSettled(server);
 
   let text = '';
   try {
@@ -219,103 +257,44 @@ export const setWhitelistEnabled = async (server, enabled) => {
     await volumeOwner(server.volume_name)
   );
 
-  // The image rewrites server.properties from the environment on recreate, so
-  // the stored value has to agree or the next rebuild would undo this.
   const env = { ...(server.env || {}), ENABLE_WHITELIST: String(enabled) };
   db.prepare('UPDATE servers SET env = ? WHERE id = ?').run(JSON.stringify(env), server.id);
 
-  return {
-    via: 'file',
-    output: `Whitelist enforcement ${enabled ? 'on' : 'off'} from the next start.`,
-  };
+  if (running) {
+    try {
+      const out = await rconCommand(server, `whitelist ${enabled ? 'on' : 'off'}`);
+      return { via: 'file', output: `Saved and applied live. ${stripFormatting(out).trim()}`.trim() };
+    } catch {
+      /* saved either way; just couldn't confirm the live toggle */
+    }
+  }
+  return { via: 'file', output: `Whitelist enforcement ${enabled ? 'on' : 'off'} from the next start.` };
 };
 
-export const addOp = (server, name, level, actor) =>
-  mutate(server, {
-    command: `op ${name}`,
-    file: FILES.ops,
-    actor,
-    apply: async (list) => {
-      const profile =
-        list.find((e) => e.name?.toLowerCase() === name.toLowerCase()) || (await lookupUuid(name));
-      const rest = list.filter((e) => e.name?.toLowerCase() !== name.toLowerCase());
-      return [
-        ...rest,
-        {
-          uuid: profile.uuid,
-          name: profile.name,
-          level: level ?? 4,
-          bypassesPlayerLimit: false,
-        },
-      ];
-    },
-  });
+// --- ops and bans: RCON only, no file equivalent ----------------------------
 
-export const removeOp = (server, name, actor) =>
-  mutate(server, {
-    command: `deop ${name}`,
-    file: FILES.ops,
-    actor,
-    apply: async (list) => list.filter((e) => e.name?.toLowerCase() !== name.toLowerCase()),
-  });
+/** Everything below needs the server up and answering RCON; there is no file path to fall back to. */
+async function mutateLive(server, command) {
+  const { running, ready } = await awaitSettled(server);
+  if (!ready) {
+    throw httpError(409, running ? 'the server is not responding to RCON yet' : 'the server is not running');
+  }
+  const out = await rconCommand(server, command);
+  return { via: 'rcon', output: stripFormatting(out).trim() };
+}
+
+export const addOp = (server, name, actor) => mutateLive(server, `op ${name}`);
+
+export const removeOp = (server, name, actor) => mutateLive(server, `deop ${name}`);
 
 export const banPlayer = (server, name, reason, actor) =>
-  mutate(server, {
-    command: `ban ${name}${reason ? ` ${reason}` : ''}`,
-    file: FILES.bannedPlayers,
-    actor,
-    apply: async (list) => {
-      if (list.some((e) => e.name?.toLowerCase() === name.toLowerCase())) return list;
-      const profile = await lookupUuid(name);
-      return [
-        ...list,
-        {
-          uuid: profile.uuid,
-          name: profile.name,
-          created: stamp(),
-          source: actor || 'mctl',
-          expires: 'forever',
-          reason: reason || 'Banned by an operator.',
-        },
-      ];
-    },
-  });
+  mutateLive(server, `ban ${name}${reason ? ` ${reason}` : ''}`);
 
-export const pardonPlayer = (server, name, actor) =>
-  mutate(server, {
-    command: `pardon ${name}`,
-    file: FILES.bannedPlayers,
-    actor,
-    apply: async (list) => list.filter((e) => e.name?.toLowerCase() !== name.toLowerCase()),
-  });
+export const pardonPlayer = (server, name, actor) => mutateLive(server, `pardon ${name}`);
 
-export const banIp = (server, ip, reason, actor) =>
-  mutate(server, {
-    command: `ban-ip ${ip}${reason ? ` ${reason}` : ''}`,
-    file: FILES.bannedIps,
-    actor,
-    apply: async (list) => {
-      if (list.some((e) => e.ip === ip)) return list;
-      return [
-        ...list,
-        {
-          ip,
-          created: stamp(),
-          source: actor || 'mctl',
-          expires: 'forever',
-          reason: reason || 'Banned by an operator.',
-        },
-      ];
-    },
-  });
+export const banIp = (server, ip, reason, actor) => mutateLive(server, `ban-ip ${ip}${reason ? ` ${reason}` : ''}`);
 
-export const pardonIp = (server, ip, actor) =>
-  mutate(server, {
-    command: `pardon-ip ${ip}`,
-    file: FILES.bannedIps,
-    actor,
-    apply: async (list) => list.filter((e) => e.ip !== ip),
-  });
+export const pardonIp = (server, ip, actor) => mutateLive(server, `pardon-ip ${ip}`);
 
 export async function kick(server, name, reason) {
   if (!(await isLive(server))) throw httpError(409, 'the server is not running');

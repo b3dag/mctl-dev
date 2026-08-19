@@ -4,7 +4,7 @@ import busboy from 'busboy';
 import { loadServer } from './servers.js';
 import * as files from '../files.js';
 import { audit } from '../db.js';
-import { httpError } from '../servers.js';
+import { httpError } from '../errors.js';
 
 export const router = Router({ mergeParams: true });
 

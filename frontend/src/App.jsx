@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Link, Route, Routes, useLocation } from 'react-router-dom';
+import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { api } from './api.js';
 import { ToastProvider } from './ui.jsx';
 import { useEvents } from './useEvents.js';
@@ -10,7 +10,6 @@ import NewServer from './pages/NewServer.jsx';
 import Network from './pages/Network.jsx';
 import BackupsOverview from './pages/BackupsOverview.jsx';
 import Activity from './pages/Activity.jsx';
-import SystemSettings from './pages/SystemSettings.jsx';
 import ServerLayout from './server/ServerLayout.jsx';
 
 export default function App() {
@@ -81,10 +80,12 @@ export default function App() {
             <Routes>
               <Route path="/" element={<ServerList servers={servers} states={states} me={me} onChange={loadServers} />} />
               <Route path="/new" element={<NewServer me={me} onCreated={loadServers} />} />
-              <Route path="/network" element={<Network />} />
+              <Route path="/network" element={<Network onChange={refresh} />} />
               <Route path="/backups" element={<BackupsOverview />} />
               <Route path="/activity" element={<Activity />} />
-              <Route path="/settings" element={<SystemSettings onChange={refresh} />} />
+              <Route path="/settings" element={<Navigate to="/network" replace />} />
+              <Route path="/ports" element={<Navigate to="/network" replace />} />
+              <Route path="/router" element={<Navigate to="/network" replace />} />
               <Route path="/servers/:id/*" element={<ServerLayout states={states} onChange={loadServers} />} />
               <Route path="*" element={<div className="empty">Nothing here. <Link to="/">Servers</Link></div>} />
             </Routes>
