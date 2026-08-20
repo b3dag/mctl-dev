@@ -65,6 +65,14 @@ async function writeRoutesFile(mappings) {
     tmp,
     JSON.stringify({ mappings, defaultServer: config.wakerTarget }, null, 2)
   );
+  // We run as root; mc-router doesn't, and it persists its own REST-created
+  // routes back to this same file (belt-and-suspenders alongside the watch
+  // path above). rename() always hands the destination a fresh, root-owned
+  // inode, so a one-off chown after the fact doesn't stick - this has to be
+  // set on every write. World-writable is fine: the file only ever holds
+  // hostname-to-container mappings, and only these two containers on the
+  // internal network ever touch it.
+  await fs.chmod(tmp, 0o666);
   await fs.rename(tmp, config.routesFile);
 }
 
