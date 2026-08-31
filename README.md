@@ -12,16 +12,16 @@ none of them publish a port directly.
 
 ```
                     ┌──────────────────────────────────────────────┐
-  players           │  host                                         │
-  :25565 ─────────► │  mc-router ──┬─► mc-survival:25565            │
-  survival.mc.…     │              ├─► mc-creative:25565            │
-  creative.mc.…     │              └─► manager:25566  (waker)       │
-                    │                                               │
-  browser           │  cloudflared ─► manager:8080 ─► Docker API    │
-  mc.example.com    │                              └► RCON :25575   │
-                    │                              └► webhook out ─►┼─► Discord etc.
+  players           │  host                                        │
+  :25565 ─────────► │  mc-router ──┬─► mc-survival:25565           │
+  survival.mc.…     │              ├─► mc-creative:25565           │
+  creative.mc.…     │              └─► manager:25566  (waker)      │
+                    │                                              │
+  browser           │  cloudflared ─► manager:8080 ─► Docker API   │
+  mc.example.com    │                              └► RCON :25575  │
+                    │                              └► webhook out─►┼─► Discord etc.
                     └──────────────────────────────────────────────┘
-                       internal network - nothing else is published
+                       internal network, nothing else is published
 ```
 
 ## How it fits together
@@ -61,7 +61,7 @@ expects, and, every 30 minutes, checks free space on the backups volume.
 ## Quick start
 
 ```bash
-git clone <this repo> mctl && cd mctl
+git clone https://github.com/b3dag/mctl-dev mctl-dev && cd mctl-dev
 ./install.sh
 ```
 
@@ -129,6 +129,7 @@ install.
 | `DEV_USER` | Local-dev identity, used only when enforcement is off |
 | `MC_IMAGE` | Minecraft image (default `itzg/minecraft-server:latest`) |
 | `HELPER_IMAGE` | Short-lived image used for volume operations |
+| `SELF_IMAGE` | The manager's own image tag, reused as a helper for UPnP; must match the `image:` this service builds as |
 | `DEFAULT_MEMORY` | Default heap for new servers |
 | `CONTAINER_LOG_MAX_SIZE` | Per-file log cap on server containers (default 10m) |
 | `CONTAINER_LOG_MAX_FILE` | Number of rotated log files to keep (default 3) |
@@ -177,6 +178,10 @@ proxy arbitrary TCP. Instead, mctl auto-detects the host's public IP (using
 page, to override that detection with a static IP, a different public
 hostname, or a LAN address if you don't want this exposed publicly. mctl
 falls back to the domain only if IP detection has never succeeded.
+
+A Direct port also has an optional **Forward automatically via UPnP**
+toggle, so a player behind a home router doesn't have to open the router's
+admin page and forward it by hand; see **Automatic port forwarding** below.
 
 **On its own port, same network only.** The same host port as above, but
 advertised using the host's own LAN IP rather than its public one. This works
@@ -339,6 +344,24 @@ every 30 minutes, warns once the volume is 90% or more full, and is
 throttled to at most one notification every 6 hours. The Network page has a
 "Send test" button that sends a fixed test message to whatever URL is
 currently saved.
+
+### Automatic port forwarding
+
+The UPnP toggle on a Direct port asks the router on the host's own local
+network to forward that port on its own, over UPnP - the same protocol game
+consoles and torrent clients use for the same purpose. It only makes sense
+on a home LAN with a UPnP-capable router; on a VPS or cloud host there is no
+such router to ask, so it just fails and shows that in the UI rather than
+blocking anything.
+
+The mapping request itself can't run from mctl's own internal Docker
+network, since the router is only reachable from the LAN - it uses the same
+host-networking helper container trick as detecting the LAN address (see
+**Direct port**, above). mctl re-requests every enabled mapping every
+15 minutes rather than only once: routers do not reliably honour a
+"permanent" UPnP lease, and a reboot forgets every mapping outright, so this
+is renewal and self-healing in one. A server's Settings tab shows whether
+the last attempt succeeded, failed, or hasn't run yet.
 
 ### Moving a world
 
