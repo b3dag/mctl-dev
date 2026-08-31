@@ -108,6 +108,12 @@ services:
     environment:
       # Required when the "tunnel" profile is active.
       TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
+      # cloudflared defaults to QUIC (UDP) with an http2 fallback that is
+      # unreliable in practice - many VMs and hypervisors block outbound UDP
+      # entirely, which shows up as an endless "failed to dial to edge with
+      # quic" retry loop and no fallback. Leave empty for cloudflared's own
+      # default; set to http2 if that happens.
+      TUNNEL_TRANSPORT_PROTOCOL: ${TUNNEL_TRANSPORT_PROTOCOL:-}
     depends_on:
       - manager
     networks:
