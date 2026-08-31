@@ -111,9 +111,16 @@ services:
       # cloudflared defaults to QUIC (UDP) with an http2 fallback that is
       # unreliable in practice - many VMs and hypervisors block outbound UDP
       # entirely, which shows up as an endless "failed to dial to edge with
-      # quic" retry loop and no fallback. Leave empty for cloudflared's own
-      # default; set to http2 if that happens.
-      TUNNEL_TRANSPORT_PROTOCOL: ${TUNNEL_TRANSPORT_PROTOCOL:-}
+      # quic" retry loop and no fallback. Leave unset in .env for
+      # cloudflared's own default; set to http2 if that happens.
+      #
+      # No :- default here on purpose: cloudflared treats a *present but
+      # empty* value as an invalid protocol name and refuses to start, so
+      # this has to be genuinely absent from the container's environment
+      # when you haven't set it, not merely empty. The bare key (no value)
+      # is Compose's way to say that - it drops the variable entirely
+      # instead of passing "".
+      TUNNEL_TRANSPORT_PROTOCOL:
     depends_on:
       - manager
     networks:
