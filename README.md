@@ -123,7 +123,6 @@ install.
 | `MC_PORT` | Shared host port for mc-router (default 25565) |
 | `PUBLIC_HOST` | Address shown for directly published servers; see below. Empty by default |
 | `TUNNEL_TOKEN` | Cloudflare Tunnel token |
-| `TUNNEL_TRANSPORT_PROTOCOL` | `quic`, `http2`, or empty for cloudflared's own default; see below |
 | `COMPOSE_PROFILES` | `tunnel` to run cloudflared; empty to skip it |
 | `REQUIRE_CF_ACCESS` | Enforce the identity header (keep `true`) |
 | `ALLOWED_EMAILS` | Optional comma-separated allowlist |
@@ -476,12 +475,3 @@ off wake-on-join for each server and give mc-router the Docker socket.
 **Minecraft traffic doesn't go through the tunnel.** Cloudflare Tunnel
 doesn't carry arbitrary TCP for unauthenticated clients, so port 25565 is a
 direct port mapping. Only the web UI goes through the tunnel.
-
-**The tunnel can fail to connect on a VM.** `cloudflared` defaults to QUIC
-(UDP) and is meant to fall back to HTTP/2 if UDP doesn't work, but that
-fallback doesn't always trigger in practice. Many VMs and hypervisors block
-outbound UDP by default, which shows up as an endless retry loop in
-`docker compose logs cloudflared`:
-`failed to dial to edge with quic: timeout: handshake did not complete in time`.
-Set `TUNNEL_TRANSPORT_PROTOCOL=http2` in `.env` and restart the `cloudflared`
-service to force the TCP-based protocol instead.
