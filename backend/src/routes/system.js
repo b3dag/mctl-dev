@@ -9,6 +9,7 @@ import { inspectSafe } from '../docker.js';
 import { getSettings, saveSettings, getDomain, getPublicHost, routerAddress, directAddress, lanAddress } from '../settings.js';
 import * as backups from '../backups.js';
 import { sendTestNotification } from '../notify.js';
+import { getUpnpStatus } from '../upnp.js';
 
 export const router = Router();
 
@@ -72,6 +73,8 @@ router.get('/network', async (_req, res, next) => {
           hostname: s.hostname,
           hostPort: s.host_port || null,
           pendingRestart: (s.host_port || null) !== actual,
+          upnpEnabled: !!s.upnp_enabled,
+          upnpStatus: getUpnpStatus(s.id),
           running: !!stateOf(s.id).running,
           autostartOnJoin: !!s.autostart_on_join,
           routerAddress: routerAddress(s),

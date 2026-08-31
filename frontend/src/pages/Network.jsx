@@ -195,6 +195,17 @@ export default function Network({ onChange }) {
                   {s.pendingRestart && (
                     <div className="err-text small">Not applied yet, recreate the container</div>
                   )}
+                  {s.upnpEnabled && (
+                    <div className="small muted">
+                      {s.upnpStatus?.ok ? (
+                        <span className="row" style={{ gap: 4 }}><span className="dot ready" /> UPnP forwarded</span>
+                      ) : s.upnpStatus ? (
+                        <span className="row err-text" style={{ gap: 4 }}><span className="dot unhealthy" /> UPnP failed</span>
+                      ) : (
+                        'UPnP pending'
+                      )}
+                    </div>
+                  )}
                 </td>
                 <td>
                   {s.lanAddress ? (

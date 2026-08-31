@@ -68,9 +68,11 @@ async function main() {
   await initBackups();
   initSchedules();
   await reconcile().catch((e) => console.error('[boot] reconcile failed:', e.message));
+  // Before startMonitor: its first tick also requests any enabled UPnP
+  // mappings, which needs the LAN IP detected here to already have a value.
+  startIpDetection();
   startMonitor();
   startWaker();
-  startIpDetection();
 
   server.listen(config.port, '0.0.0.0', () => {
     console.log(`[boot] manager API on :${config.port}`);

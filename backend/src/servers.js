@@ -19,6 +19,7 @@ import { getDomain } from './settings.js';
 import { dropRcon, isReady, playerList, rconCommand } from './rcon.js';
 import { sanitizeEnv, RESERVED_ENV, SERVER_TYPES } from './envcatalog.js';
 import { notify } from './notify.js';
+import { requestMapping, releaseMapping } from './upnp.js';
 
 export const slugify = (s) =>
   String(s)
@@ -118,6 +119,11 @@ export function validateHostPort(input, selfId = null) {
   return port;
 }
 
+/** UPnP only ever forwards the direct port, so it cannot be on without one. */
+function validateUpnp(input, hostPort) {
+  return input && hostPort ? 1 : 0;
+}
+
 /** Countdown before a stop or restart, in seconds. 0 turns it off. */
 function validateWarning(input) {
   if (input === null || input === undefined || input === '') return 30;
@@ -154,6 +160,7 @@ export async function createServer(input, actor) {
     container_name: `mc-${slug}`,
     volume_name: `mctl-${slug}-data`,
     host_port: validateHostPort(input.host_port),
+    upnp_enabled: validateUpnp(input.upnp_enabled, input.host_port),
     stop_warning_seconds: validateWarning(input.stop_warning_seconds),
     type,
     version: String(input.version || 'LATEST'),
@@ -173,10 +180,10 @@ export async function createServer(input, actor) {
     throw httpError(409, `container ${server.container_name} already exists`);
 
   db.prepare(
-    `INSERT INTO servers (id,name,slug,hostname,container_name,volume_name,host_port,
+    `INSERT INTO servers (id,name,slug,hostname,container_name,volume_name,host_port,upnp_enabled,
        stop_warning_seconds,type,version,memory,seed,rcon_password,env,autostart_on_join,
        idle_timeout_minutes,created_at,created_by)
-     VALUES (@id,@name,@slug,@hostname,@container_name,@volume_name,@host_port,
+     VALUES (@id,@name,@slug,@hostname,@container_name,@volume_name,@host_port,@upnp_enabled,
        @stop_warning_seconds,@type,@version,@memory,@seed,@rcon_password,@env,@autostart_on_join,
        @idle_timeout_minutes,@created_at,@created_by)`
   ).run(server);
@@ -193,6 +200,7 @@ export async function createServer(input, actor) {
   await syncRoutes(allStates());
   audit(actor, id, 'server.create', `${type} ${server.version} -> ${server.hostname}`);
   events.emit('servers');
+  requestMapping(full);
   return full;
 }
 
@@ -431,6 +439,11 @@ export async function updateServer(id, patch, actor) {
   if (patch.host_port !== undefined) {
     fields.host_port = validateHostPort(patch.host_port, id);
   }
+  if (patch.upnp_enabled !== undefined || 'host_port' in fields) {
+    const hostPort = 'host_port' in fields ? fields.host_port : server.host_port;
+    const wanted = patch.upnp_enabled !== undefined ? patch.upnp_enabled : server.upnp_enabled;
+    fields.upnp_enabled = validateUpnp(wanted, hostPort);
+  }
   if (patch.stop_warning_seconds !== undefined) {
     fields.stop_warning_seconds = validateWarning(patch.stop_warning_seconds);
   }
@@ -450,6 +463,16 @@ export async function updateServer(id, patch, actor) {
   if (needsRecreate && patch.apply !== false) await recreateServer(id, actor);
   else await syncRoutes(allStates());
   events.emit('servers');
+
+  // The old mapping (if any) is keyed by the old port, so it has to be
+  // released explicitly rather than just letting a new map() overwrite it -
+  // that would leave a stale forward open when the port changed or UPnP was
+  // turned off outright.
+  if ('host_port' in fields || 'upnp_enabled' in fields) {
+    if (server.upnp_enabled && server.host_port) releaseMapping(server);
+    requestMapping(updated);
+  }
+
   return { server: updated, recreated: needsRecreate && patch.apply !== false };
 }
 
@@ -465,6 +488,7 @@ export async function deleteServer(id, { deleteVolume = true } = {}, actor) {
     });
   }
   if (deleteVolume) await removeVolume(server.volume_name);
+  if (server.upnp_enabled && server.host_port) releaseMapping(server);
 
   db.prepare('DELETE FROM servers WHERE id = ?').run(id);
   forgetState(id);

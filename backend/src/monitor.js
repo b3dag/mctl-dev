@@ -5,6 +5,7 @@ import { refresh, stopServer } from './servers.js';
 import { stateOf, events, allStates } from './state.js';
 import { buildMappings, currentRoutes, syncRoutes } from './router.js';
 import { notify } from './notify.js';
+import { refreshAll as refreshUpnp } from './upnp.js';
 
 /**
  * Resource history lives in SQLite rather than memory, so a graph survives a
@@ -141,6 +142,13 @@ export function startMonitor() {
   checkDiskSpace().catch(() => {});
   const d = setInterval(() => checkDiskSpace().catch(() => {}), 30 * 60000);
   d.unref?.();
+
+  // Routers do not reliably honour a "permanent" UPnP lease, and a reboot
+  // forgets every mapping outright, so this is renewal and self-healing in
+  // one, not just the initial request made when a server is created.
+  refreshUpnp().catch(() => {});
+  const u = setInterval(() => refreshUpnp().catch(() => {}), 15 * 60000);
+  u.unref?.();
 
   return t;
 }

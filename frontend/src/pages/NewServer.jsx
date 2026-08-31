@@ -15,6 +15,7 @@ export default function NewServer({ onCreated }) {
     name: '',
     slug: '',
     hostPort: '',
+    upnpEnabled: false,
     type: 'PAPER',
     version: 'LATEST',
     memory: '2G',
@@ -47,6 +48,7 @@ export default function NewServer({ onCreated }) {
         name: form.name,
         slug,
         host_port: form.hostPort === '' ? null : Number(form.hostPort),
+        upnp_enabled: form.upnpEnabled,
         type: form.type,
         version: form.version,
         memory: form.memory,
@@ -112,6 +114,20 @@ export default function NewServer({ onCreated }) {
             )}
           </div>
         </div>
+
+        {form.hostPort && (
+          <div className="checkbox">
+            <input id="upnp" type="checkbox" checked={form.upnpEnabled} onChange={set('upnpEnabled')} />
+            <label htmlFor="upnp">Forward this port automatically via UPnP</label>
+          </div>
+        )}
+        {form.hostPort && form.upnpEnabled && (
+          <div className="small muted" style={{ marginTop: -6 }}>
+            Asks the router on this host's local network to open the port on its own. Only works on a
+            LAN with a UPnP-capable router - it does nothing on a VPS or cloud host, since there is no
+            such router to ask.
+          </div>
+        )}
 
         <div className="row wrap" style={{ gap: 12 }}>
           <div className="field grow">

@@ -21,6 +21,7 @@ import { containerState } from '../docker.js';
 import { stripFormatting } from '../text.js';
 import * as lists from '../playerlists.js';
 import * as schedules from '../schedules.js';
+import { getUpnpStatus } from '../upnp.js';
 
 export const router = Router();
 
@@ -38,6 +39,8 @@ const shape = (s) => ({
   hostname: s.hostname,
   hostnameOverride: s.hostname_override || '',
   hostPort: s.host_port || null,
+  upnpEnabled: !!s.upnp_enabled,
+  upnpStatus: getUpnpStatus(s.id),
   routerAddress: routerAddress(s),
   directAddress: directAddress(s),
   lanAddress: lanAddress(s),

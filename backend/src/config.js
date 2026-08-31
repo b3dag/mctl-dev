@@ -25,6 +25,11 @@ export const config = {
   mcImage: process.env.MC_IMAGE || 'itzg/minecraft-server:latest',
   helperImage: process.env.HELPER_IMAGE || 'alpine:3.20',
   resticImage: process.env.RESTIC_IMAGE || 'restic/restic:latest',
+  // Our own image, re-used as a helper container for UPnP: the router lives
+  // on the LAN rather than the internal Docker network, so that call has to
+  // run with host networking (like detectLanIp), and only our own image has
+  // the port-mapping library available to it.
+  selfImage: process.env.SELF_IMAGE || 'mctl-manager:latest',
   defaultMemory: process.env.DEFAULT_MEMORY || '2G',
 
   // Docker's json-file driver keeps every line forever by default, which

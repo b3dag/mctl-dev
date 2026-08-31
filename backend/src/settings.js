@@ -104,6 +104,9 @@ export const directAddress = (server) =>
 export const lanAddress = (server) =>
   server.host_port && detectedLanIp ? `${detectedLanIp}:${server.host_port}` : null;
 
+/** The raw value, for upnp.js: a mapping request has to target this host specifically. */
+export const getDetectedLanIp = () => detectedLanIp;
+
 /** A webhook (Discord-compatible) that crashes, backup failures and low disk space get posted to. Empty means off. */
 export const getWebhookUrl = () => read('webhookUrl') || '';
 

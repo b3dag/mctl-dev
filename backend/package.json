@@ -13,6 +13,7 @@
     "test:imports": "node test/imports.mjs"
   },
   "dependencies": {
+    "@achingbrain/nat-port-mapper": "^4.0.5",
     "archiver": "^7.0.1",
     "better-sqlite3": "^11.5.0",
     "busboy": "^1.6.0",

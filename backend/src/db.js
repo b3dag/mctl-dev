@@ -101,6 +101,12 @@ if (!serverColumns.includes('hostname_override')) {
 if (!serverColumns.includes('host_port')) {
   db.exec('ALTER TABLE servers ADD COLUMN host_port INTEGER');
 }
+// Whether that direct port should also be requested from the LAN router over
+// UPnP, so home users do not have to forward it by hand. Only meaningful
+// alongside host_port; servers.js keeps the two in sync.
+if (!serverColumns.includes('upnp_enabled')) {
+  db.exec('ALTER TABLE servers ADD COLUMN upnp_enabled INTEGER NOT NULL DEFAULT 0');
+}
 // cpu_limit existed briefly and was dropped again; clear it where it landed.
 if (serverColumns.includes('cpu_limit')) {
   try {

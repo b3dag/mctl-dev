@@ -67,6 +67,10 @@ services:
       # Server defaults
       MC_IMAGE: ${MC_IMAGE:-itzg/minecraft-server:latest}
       HELPER_IMAGE: ${HELPER_IMAGE:-alpine:3.20}
+      # Must match this service's own `image:` above - used as a helper
+      # container for UPnP port mapping, the one thing that needs host
+      # networking plus our own dependencies rather than the generic helper.
+      SELF_IMAGE: mctl-manager:latest
       DEFAULT_MEMORY: ${DEFAULT_MEMORY:-2G}
       DATA_DIR: /app/data
       BACKUP_DIR: /backups

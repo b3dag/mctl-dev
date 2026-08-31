@@ -19,6 +19,7 @@ export default function Settings({ server, me, onSaved, onDelete }) {
     name: server.name,
     hostname: server.hostnameOverride || '',
     host_port: server.hostPort ? String(server.hostPort) : '',
+    upnp_enabled: server.upnpEnabled,
     type: server.type,
     version: server.version,
     memory: server.memory,
@@ -135,6 +136,23 @@ export default function Settings({ server, me, onSaved, onDelete }) {
             {' '}Changing this recreates the container.
           </div>
         </div>
+
+        {core.host_port && (
+          <div className="checkbox">
+            <input id="upnp" type="checkbox" checked={core.upnp_enabled} onChange={set('upnp_enabled')} />
+            <label htmlFor="upnp">Forward this port automatically via UPnP</label>
+          </div>
+        )}
+        {server.upnpEnabled && (
+          <div className="small muted" style={{ marginTop: -6 }}>
+            {server.upnpStatus?.ok
+              ? `Forwarded as of ${new Date(server.upnpStatus.at).toLocaleTimeString()}.`
+              : server.upnpStatus
+              ? <span className="err-text">Failed: {server.upnpStatus.message}</span>
+              : 'Not attempted yet.'}
+            {' '}Re-requested automatically every 15 minutes, since routers do not reliably keep a mapping.
+          </div>
+        )}
       </section>
 
       <section className="card">
